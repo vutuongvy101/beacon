@@ -64,7 +64,7 @@ Individual notebooks under `Codes/basic/` and `Codes/advanced/` are self-contain
 | Data & Baselines | TBD |
 | ML & Evaluation | TBD |
 | LLM & Prompting | TBD |
-| RAG & Integration (lead) | TBD |
+| RAG & Integration | TBD |
 
 Group ID: `<REPLACE_WITH_GROUP_ID>`
 
