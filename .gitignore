@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+beacon-env/
+.env
+.env.*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets (keep config.py in repo; store keys in env or untracked local file)
+**/secrets.*
+**/config.local.py
+
+# Large / generated (uncomment if you prefer not to commit built indices)
+# data/faiss_index/*
+# !data/faiss_index/.gitkeep

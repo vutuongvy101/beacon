@@ -1,0 +1,48 @@
+# ── data collection ───────────────────────────────────────────────────────────
+requests>=2.31
+beautifulsoup4>=4.12
+
+# ── core data / ML ────────────────────────────────────────────────────────────
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.4
+scipy>=1.12
+
+# ── NLP — basic (B1–B5) ───────────────────────────────────────────────────────
+nltk>=3.8
+spacy>=3.7
+gensim>=4.3
+bertopic>=0.16
+sentence-transformers>=2.7
+
+# ── NLP — advanced (A1–A7) ────────────────────────────────────────────────────
+ollama>=0.2                  # Qwen2.5 via Ollama (local, no API key)
+transformers>=4.40
+datasets>=2.19
+peft>=0.11                   # LoRA fine-tuning (A1)
+qwen-vl-utils>=0.0.8         # Qwen2-VL multimodal helpers (A7)
+accelerate>=0.30             # HuggingFace model loading
+# torch — install separately to match your hardware:
+#   CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   GPU:  pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# ── RAG (A2) ──────────────────────────────────────────────────────────────────
+faiss-cpu>=1.8
+langchain>=0.2
+langchain-community>=0.2     # ChatOllama, OllamaEmbeddings
+
+# ── agentic pipeline (A6 + Phase 2) ──────────────────────────────────────────
+langgraph>=0.1
+
+# ── backend + frontend ────────────────────────────────────────────────────────
+fastapi>=0.111
+uvicorn[standard]>=0.29
+streamlit>=1.35
+
+# ── utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0
+tqdm>=4.66
+matplotlib>=3.8
+seaborn>=0.13
+wordcloud>=1.9
+Pillow>=10.3                 # image handling (A7)

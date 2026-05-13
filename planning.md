@@ -179,7 +179,7 @@ Two architecture versions are planned — Core delivered by end of Week 2, Enhan
   Optional: Cross-lingual retrieval — stretch only
         ↓
 [Enhanced LLM Insight Generator]               ← A1 + A3 enhanced
-  VLM integration for meme analysis (GPT-4V or BLIP-2)
+  VLM integration for meme analysis (Qwen2-VL or BLIP-2)
   Optional: Multilingual prompting — stretch only
         ↓
 [Enhanced Output Layer]
@@ -247,14 +247,14 @@ This project involves GPU-dependent workflows (LoRA fine-tuning, optional VLM in
 | Mode | When used | What runs | Hardware required |
 | ---- | --------- | --------- | ----------------- |
 | **Full GPU mode** | Development, training, multimodal inference | LoRA fine-tuning (A1), VLM/BLIP-2 inference (A7), BERTopic on large corpus (B5) | Google Colab T4 (free tier sufficient) |
-| **Lightweight CPU fallback** | Demo, video, submission, markers | API-based LLMs (GPT-4o-mini), FAISS retrieval, traditional ML models (B4), pre-loaded checkpoints, cached VLM outputs | Any machine with Python 3.10+ |
+| **Lightweight CPU fallback** | Demo, video, submission, markers | Qwen2.5:3b via Ollama (local, no API key), FAISS retrieval, traditional ML models (B4), pre-loaded checkpoints, cached VLM outputs | Any machine with Python 3.10+ |
 
 **Key principle:** The demo and video always run in CPU fallback mode on saved snapshot data. GPU mode is used only during development and training. The system must never require a GPU at presentation time.
 
 #### Execution Paths
 
 - **LoRA fine-tuning (A1):** Google Colab T4; checkpoint saved to `models/distilbert_lora/` after training; loaded from checkpoint at inference time — no retraining needed for demo.
-- **VLM inference (A7):** GPT-4V via API (CPU-safe) or BLIP-2 on Colab T4; API outputs cached to `data/snapshots/multimodal_cache.json` after first call.
+- **VLM inference (A7):** Qwen2-VL on Colab T4 or BLIP-2 on Colab T4; outputs cached to `data/snapshots/multimodal_cache.json` after first call.
 - **RAG retrieval (A2):** FAISS index built once, saved to `data/faiss_index/`; loaded at demo time — no rebuild required.
 - **Pipeline demo:** Runs entirely from saved snapshot data; no live scraping, no live training, no GPU required.
 
@@ -276,7 +276,7 @@ Expensive inference outputs are cached to disk to ensure stable demos, avoid rep
 - All team members have Python 3.10+ locally
 - Google Colab T4 (free tier) is available for GPU-dependent training
 - No local GPU required for demo or submission
-- API costs estimated at <$5 total (GPT-4o-mini at ~$0.15/1M tokens; VLM calls ~$0.01/image)
+- LLM cost: **$0** — Qwen2.5 runs locally via Ollama; Qwen2-VL runs on free Colab T4 with cached outputs
 
 ---
 
@@ -290,25 +290,25 @@ Expensive inference outputs are cached to disk to ensure stable demos, avoid rep
 
 ### Basic Techniques (≥3 required, targeting 5)
 
-| ID | Technique | Notebook | Tier | Alternatives compared (within same notebook) | Rubric coverage |
-| -- | --------- | -------- | ---- | -------------------------------------------- | --------------- |
-| B1 | Text Preprocessing Pipeline | `basic/B1_preprocessing.ipynb` | **Core** | NLTK tokenizer vs spaCy tokenizer vs regex-based | tokenization, normalization, stemming/lemmatization, hashtag/mention extraction |
-| B2 | Named Entity Recognition | `basic/B2_ner.ipynb` | **Core** | spaCy (`en_core_web_sm`) vs spaCy (`en_core_web_trf`) vs NLTK NE chunker | entity/location/brand extraction |
-| B3 | Rule-based Information Extraction | `basic/B3_rule_extraction.ipynb` | **Core** | Custom regex vs spaCy Matcher vs manual keyword list | hashtag trends, mention networks, URL extraction |
-| B4 | Sentiment Analysis (Traditional ML) | `basic/B4_sentiment_ml.ipynb` | **Core** | Naive Bayes vs Logistic Regression vs SVM — all with BoW and TF-IDF features | sentiment classification, baseline ML comparison |
-| B5 | Topic / Trend Detection + Clustering | `basic/B5_topic_clustering.ipynb` | **Core** | LDA vs BERTopic vs K-Means on sentence embeddings | topic detection, text clustering, trend identification |
+| ID | Technique | Notebook | Owner | Tier | Alternatives compared (within same notebook) | Rubric coverage |
+| -- | --------- | -------- | ----- | ---- | -------------------------------------------- | --------------- |
+| B1 | Text Preprocessing Pipeline | `basic/B1_preprocessing.ipynb` | Chi | **Core** | NLTK tokenizer vs spaCy tokenizer vs regex-based | tokenization, normalization, stemming/lemmatization, hashtag/mention extraction |
+| B2 | Named Entity Recognition | `basic/B2_ner.ipynb` | Tarun | **Core** | spaCy (`en_core_web_sm`) vs spaCy (`en_core_web_trf`) vs NLTK NE chunker | entity/location/brand extraction |
+| B3 | Rule-based Information Extraction | `basic/B3_rule_extraction.ipynb` | Joshua | **Core** | Custom regex vs spaCy Matcher vs manual keyword list | hashtag trends, mention networks, URL extraction |
+| B4 | Sentiment Analysis (Traditional ML) | `basic/B4_sentiment_ml.ipynb` | Tarun | **Core** | Naive Bayes vs Logistic Regression vs SVM — all with BoW and TF-IDF features | sentiment classification, baseline ML comparison |
+| B5 | Topic / Trend Detection + Clustering | `basic/B5_topic_clustering.ipynb` | Vy | **Core** | LDA vs BERTopic vs K-Means on sentence embeddings | topic detection, text clustering, trend identification |
 
 ### Advanced Techniques (≥3 required, targeting 6+)
 
-| ID | Technique | Notebook | Tier | Alternatives compared (within same notebook) | Rubric coverage |
-| -- | --------- | -------- | ---- | -------------------------------------------- | --------------- |
-| A1 | LLM Foundation Models — Fine-tuning + Prompting | `advanced/A1_llm_foundation.ipynb` | **Core** | **Part 1 (fine-tuning):** LoRA fine-tuned DistilBERT vs pretrained DistilBERT vs SVM baseline on Sentiment140. **Part 2 (prompting):** GPT-4o-mini zero-shot vs few-shot vs instruction. **Part 3:** fine-tuned small model vs prompted large model — accuracy, cost, latency tradeoffs | Fine-tuning/adaptation (LoRA), foundation model integration, prompt templates. Rubric: **1.5 marks** (fine-tuned) vs 0.5 (pretrained-only) |
-| A2 | RAG (Retrieval Augmented Generation) | `advanced/A2_rag.ipynb` | **Core** | FAISS as primary vector store; `text-embedding-3-small` vs `all-MiniLM-L6-v2` as embedder | RAG pipeline, retrieval quality, grounded generation |
-| A3 | Chain-of-Thought + ReAct Prompting | `advanced/A3_cot_react.ipynb` | **Core** | Direct prompting vs CoT vs ReAct on trend explanation task | Reasoning quality, step-by-step analysis |
-| A5 | Crisis Detection (LLM-based) | `advanced/A5_crisis_detection.ipynb` | **Core** | Rule-based keyword threshold vs LLM binary classifier vs LLM with CoT reasoning | Risk classification, crisis explanation generation |
-| A6 | Agentic Design (mini-demo) | `advanced/A6_agent_demo.ipynb` | **Core** | Single sequential chain vs LangGraph conditional graph (one-cycle demo) | Agentic design pattern, graph-based orchestration |
-| A7 | Multimodal LLM | `advanced/A7_multimodal.ipynb` | **Enhancement** ⭐ *primary differentiator* | GPT-4V vs BLIP-2 vs EasyOCR for image+text Reddit posts; text-only vs multimodal sentiment comparison on 20–50 post benchmark | Multimodal LLM rubric item; demonstrates enriched understanding beyond text |
-| A4 | Multilingual Analysis | `advanced/A4_multilingual.ipynb` | **Stretch only** | NLLB-200 vs Google Translate API vs mBART for translation; multilingual sentiment vs English-only | Language detection, translation, multilingual sentiment |
+| ID | Technique | Notebook | Owner | Tier | Alternatives compared (within same notebook) | Rubric coverage |
+| -- | --------- | -------- | ----- | ---- | -------------------------------------------- | --------------- |
+| A1 | LLM Foundation Models — Fine-tuning + Prompting | `advanced/A1_llm_foundation.ipynb` | Vy | **Core** | **Part 1 (fine-tuning):** LoRA fine-tuned DistilBERT vs pretrained DistilBERT vs SVM baseline on Sentiment140. **Part 2 (prompting):** Qwen2.5-7b zero-shot vs few-shot vs instruction. **Part 3:** fine-tuned small model vs prompted large model — accuracy, cost, latency tradeoffs | Fine-tuning/adaptation (LoRA), foundation model integration, prompt templates. Rubric: **1.5 marks** (fine-tuned) vs 0.5 (pretrained-only) |
+| A2 | RAG (Retrieval Augmented Generation) | `advanced/A2_rag.ipynb` | Chi | **Core** | FAISS as primary vector store; `text-embedding-3-small` vs `all-MiniLM-L6-v2` as embedder | RAG pipeline, retrieval quality, grounded generation |
+| A3 | Chain-of-Thought + ReAct Prompting | `advanced/A3_cot_react.ipynb` | Joshua | **Core** | Direct prompting vs CoT vs ReAct on trend explanation task | Reasoning quality, step-by-step analysis |
+| A5 | Crisis Detection (LLM-based) | `advanced/A5_crisis_detection.ipynb` | TBD | **Core** | Rule-based keyword threshold vs LLM binary classifier vs LLM with CoT reasoning | Risk classification, crisis explanation generation |
+| A6 | Agentic Design (mini-demo) | `advanced/A6_agent_demo.ipynb` | TBD | **Core** | Single sequential chain vs LangGraph conditional graph (one-cycle demo) | Agentic design pattern, graph-based orchestration |
+| A7 | Multimodal LLM | `advanced/A7_multimodal.ipynb` | TBD | **Enhancement** ⭐ *primary differentiator* | Qwen2-VL vs BLIP-2 vs EasyOCR for image+text Reddit posts; text-only vs multimodal sentiment comparison on 20–50 post benchmark | Multimodal LLM rubric item; demonstrates enriched understanding beyond text |
+| A4 | Multilingual Analysis | `advanced/A4_multilingual.ipynb` | TBD | **Stretch only** | NLLB-200 vs Google Translate API vs mBART for translation; multilingual sentiment vs English-only | Language detection, translation, multilingual sentiment |
 
 > A6 is a Phase 1 mini-demo only (one agent cycle to validate the LangGraph pattern). The full orchestrator is built in Phase 2.
 > A7 is the primary Week 3 differentiator — more visually compelling than multilingual, easier to demo, more directly relevant to social media meme/screenshot analysis.
@@ -425,7 +425,7 @@ def detect_topics(texts: list[str]) -> list[dict]: ...  # [{topic_id, keywords, 
 
 # A1 — two exports (fine-tuned model + LLM prompting)
 def classify_sentiment_ft(texts: list[str]) -> list[str]: ...  # LoRA fine-tuned DistilBERT
-def run_llm(prompt: str) -> str: ...                           # GPT/Gemini prompt call
+def run_llm(prompt: str) -> str: ...                           # Qwen2.5 via Ollama
 
 # A2
 def rag_retrieve(query: str, top_k: int = 5) -> list[str]: ...
@@ -528,7 +528,7 @@ This section must be referenced in the report introduction and methodology secti
 
 - English-only in core system (multilingual is stretch only).
 - System quality depends on snapshot recency — a stale snapshot may not reflect current brand perception.
-- API dependency for cloud LLMs (GPT-4o-mini, GPT-4V) introduces cost and availability risk — mitigated by caching and open-source fallbacks (see Section 15).
+- Ollama must be running locally for LLM inference — mitigated by cached outputs in DEMO_MODE (no Ollama required at demo time).
 
 ---
 
@@ -540,7 +540,7 @@ This section must be referenced in the report introduction and methodology secti
 
 - Group ID confirmed
 - Brand confirmed (**OpenAI / ChatGPT** as primary; optional second brand for dual-brand stretch only, e.g. Anthropic)
-- LLM provider + model agreed (suggested: GPT-4o-mini or Gemini 1.5 Flash — cheap, fast)
+- LLM provider + model agreed: **Qwen2.5 via Ollama** (local, free, no API key — `qwen2.5:3b` for demo/classification, `qwen2.5:7b` for reasoning/reports)
 - Frontend choice locked: Streamlit vs Gradio vs HTML/CSS/JS (see Section 4 Output Layer)
 - Reddit scraper script working (self-developed, throttled, saves JSON snapshots)
 - LangGraph state schema reviewed and approved (see Section 4)
@@ -564,7 +564,7 @@ This section must be referenced in the report introduction and methodology secti
 | B3 | Implement regex extraction, compare rule patterns | Coverage/accuracy table on 50-post sample, `extract_signals()` exported |
 | B4 | Train Naive Bayes + LR + SVM on Sentiment140 sample, compare macro-F1 | F1 comparison table, `classify_sentiment()` exported |
 | B5 | Run LDA vs BERTopic on brand posts, compare topic coherence (C_v) | Coherence scores, example topics, `detect_topics()` exported |
-| A1 | **Part 1:** LoRA fine-tune DistilBERT on Sentiment140 sample (Colab T4, ~15–20 min). Compare: SVM → pretrained DistilBERT → LoRA fine-tuned. **Part 2:** GPT-4o-mini with 3 prompt styles (zero-shot, few-shot, instruction). **Part 3:** fine-tuned small model vs prompted large model — accuracy, cost, latency tradeoffs | F1 comparison table (all 5 methods), `run_llm()` and `classify_sentiment_ft()` exported; checkpoint saved to `models/distilbert_lora/`. **Expected time: 2 days** |
+| A1 | **Part 1:** LoRA fine-tune DistilBERT on Sentiment140 sample (Colab T4, ~15–20 min). Compare: SVM → pretrained DistilBERT → LoRA fine-tuned. **Part 2:** Qwen2.5-7b with 3 prompt styles (zero-shot, few-shot, instruction) via Ollama. **Part 3:** fine-tuned small model vs prompted large model — accuracy, cost, latency tradeoffs | F1 comparison table (all 5 methods), `run_llm()` and `classify_sentiment_ft()` exported; checkpoint saved to `models/distilbert_lora/`. **Expected time: 2 days** |
 | A2 | Build FAISS vector store, compare 2 embedding models, evaluate on 20 query-context pairs | Recall@5 table, `rag_retrieve()` exported; FAISS index saved to `data/faiss_index/` |
 | A3 | Compare direct vs CoT vs ReAct prompting for trend explanation | Qualitative comparison table, `cot_analyze()` exported |
 | A5 | Implement crisis classifier, compare rule-based threshold vs LLM on 30–50 labelled posts | Precision/recall table, `detect_crisis()` exported |
@@ -615,9 +615,9 @@ This section must be referenced in the report introduction and methodology secti
 
 | Task | Tier | Rubric impact |
 | ---- | ---- | ------------- |
-| A7: Multimodal notebook — Reddit image posts via GPT-4V or BLIP-2 (20–50 post benchmark, see Section 14) | **Enhancement** | Primary differentiator; Multimodal LLM rubric item |
+| A7: Multimodal notebook — Reddit image posts via Qwen2-VL or BLIP-2 (20–50 post benchmark, see Section 14) | **Enhancement** | Primary differentiator; Multimodal LLM rubric item |
 | Ablation study: remove each advanced component, show F1/quality drop | Core polish | Evaluation & analysis (+1 mark) |
-| Compare 2 foundation models (GPT-4o-mini vs Gemini Flash) on same prompts | Core polish | Comparison analysis (+1 mark) |
+| Compare 2 foundation models (Qwen2.5-3b vs Qwen2.5-7b) on same prompts | Core polish | Comparison analysis (+1 mark) |
 | Human evaluation: 20–30 sampled outputs rated 1–5 on 4 criteria (see Section 8) | Core polish | Report quality |
 | Add LLM-as-judge automated evaluation for A1/A3 outputs | **Stretch** | Only if A7 is complete |
 | A4: Multilingual notebook | **Stretch** | Only if all core + A7 complete |
@@ -634,20 +634,17 @@ This section must be referenced in the report introduction and methodology secti
 
 Team members choose their primary notebook ownership and collaborative contributions below. **Everyone contributes to implementation, report, presentation, and video.**
 
-### Notebook ownership (choose from the pool)
+### Notebook ownership (assigned)
 
-| Role | Primary notebooks | Report section | Presentation | Video |
-| ---- | ----------------- | -------------- | ------------ | ----- |
-| **Data & Baselines** | B1, B2, B3 (or B1, B4) | Data & Evaluation section | 1 slide + ~60s speaking | 1 demo segment |
-| **ML & Evaluation** | B4, B5 (or B3, B5) + `evaluation/metrics.py` | Experiment & Analysis section | 1 slide + ~60s speaking | 1 demo segment |
-| **LLM & Prompting** | A1, A3 (or A1, A7 if multimodal is available) | Methodology — Advanced Techniques section | 1 slide + ~60s speaking | 1 demo segment |
-| **RAG & Integration** | A2, A5, A6 + Phase 2 pipeline lead | Architecture + System Integration section | 1 slide + ~60s speaking | 1 demo segment |
+**Still to assign at Pre-Phase Day 0:** A5 (crisis detection), A6 (agentic mini-demo), A7 (multimodal — Week 3), A4 (stretch), Phase 2 pipeline / integration lead, and ownership of `evaluation/metrics.py`. Split these by capacity or pair with the closest notebook (e.g. A5 with crisis-relevant work, A6 with whoever leads LangGraph).
 
-> The **RAG & Integration** role also owns:
+> **Pipeline & integration lead** (whoever takes A5/A6 cluster) should also align with:
 >
 > - LangGraph state schema and exported function contracts (Pre-Phase, Day 0)
 > - Phase 2 pipeline integration and testing
 > - README and reproducibility pass
+
+**Reference — original role pool (for rubric coverage only):** Data & Baselines (B1–B3); ML & Evaluation (B4–B5 + metrics); LLM & Prompting (A1, A3, A7); RAG & Integration (A2, A5, A6 + pipeline).
 
 ### Collaborative contributions (all members)
 
@@ -686,9 +683,9 @@ Target: ≤5,000 words, PDF.
 These must be resolved at Pre-Phase Day 0:
 
 - Group ID / team name
-- LLM provider + model (GPT-4o-mini vs Gemini 1.5 Flash vs other)
+- LLM provider + model: **decided — Qwen2.5 via Ollama** (`qwen2.5:3b` small, `qwen2.5:7b` large)
 - **Frontend choice locked:** Streamlit vs Gradio vs HTML/CSS/JS (see Section 4 Output Layer)
-- Notebook assignments (who owns which)
+- Notebook assignments **A5, A6, A7, A4, pipeline lead** still open
 - Who owns presentation structure and video editing
 - Report section assignments (fill TBD rows in Section 13)
 - GPU access for A1 LoRA fine-tuning: Google Colab T4 confirmed
@@ -720,7 +717,7 @@ Reddit posts regularly include images (memes, screenshots, product photos) — m
 
 | Approach | Tool | When to use |
 | -------- | ---- | ----------- |
-| VLM direct analysis | GPT-4V / GPT-4o vision API | Easiest to implement; small API cost (~$0.01/image); outputs cached after first call |
+| VLM direct analysis | Qwen2-VL (HuggingFace, Colab T4) | Free, open-source, strong multimodal capability; outputs cached after first run |
 | Open-source VLM captioning | BLIP-2 (HuggingFace, free) | Free, runs on Colab T4; generates caption → feed to existing pipeline |
 | OCR for screenshot posts | EasyOCR (free) | Best for screenshot-heavy subreddits; extracts embedded text from images |
 
@@ -740,11 +737,11 @@ Reddit posts regularly include images (memes, screenshots, product photos) — m
 | Phase 2 integration breaks because exported functions are incompatible | High if not caught early | Integration lead reviews all Phase 1 PRs for function signature compliance |
 | LangGraph learning curve exceeds 1.5 days | Medium | Fall back to sequential modular pipeline immediately; do not over-invest in LangGraph |
 | Reddit scraper blocked or produces inconsistent data | Medium | Scraping done offline during development only; demo always runs on committed JSON snapshots — scraper instability has zero impact on presentation day |
-| LLM API key failure or cost spike at demo time | Medium | Cache all LLM outputs to disk after first run; provide static cached outputs for demo; GPT-4o-mini estimated <$5 total; open-source fallback (local Ollama or Gemini free tier) |
+| Ollama not running at demo time | Low | DEMO_MODE=true loads cached outputs — Ollama not required; all LLM responses pre-cached in `data/snapshots/llm_cache.json` |
 | VLM/multimodal inference latency or API failure | Medium | Cache VLM outputs after first call; demo always shows cached results; EasyOCR as CPU-safe fallback |
 | CUDA incompatibility or local GPU driver issues | Medium | All GPU-dependent work runs on Google Colab T4; save checkpoint after training; demo never requires GPU |
 | Colab session timeout during LoRA training | Low | Save checkpoint every epoch; resume from checkpoint; estimated training time ~15–20 min |
-| Model checkpoint loading failure at demo time | Low | Test checkpoint loading on CPU before presentation day; keep API-based fallback (GPT-4o-mini) ready |
+| Model checkpoint loading failure at demo time | Low | Test checkpoint loading on CPU before presentation day; keep `qwen2.5:3b` (Ollama) as fast text fallback |
 | Dependency conflict between notebooks | Medium | Pin all package versions in `requirements.txt`; test fresh-clone install before submission |
 | Weak analysis marks (most common loss area) | Medium | ML & Evaluation member starts building `evaluation/metrics.py` in Phase 1, not Phase 2 |
 | Unequal contributions flagged by marker | Medium | Enforce cross-deliverable checklist; each member must have code commits + report section + video segment |
@@ -830,7 +827,7 @@ The architecture is ambitious. This section defines what gets cut and in what or
 | -------- | --------- | ------------------------------ |
 | Cut first | Multilingual support (A4) | Remove entirely; mention as future work in report |
 | Cut second | Dual-brand comparison | Remove entirely; mention as future work in report |
-| Simplify third | Multimodal (A7) | Reduce benchmark from 50 posts to 20; use GPT-4V API only (skip BLIP-2 and EasyOCR comparison) |
+| Simplify third | Multimodal (A7) | Reduce benchmark from 50 posts to 20; use Qwen2-VL only (skip BLIP-2 and EasyOCR comparison) |
 | Simplify fourth | LangGraph orchestration | Replace with sequential pipeline; describe each module as an agent conceptually in the report |
 | Cut fifth | PDF report export | Output Markdown in dashboard only |
 | **Never cut** | Core pipeline | Reddit/S140 ingestion, preprocessing, sentiment, topic, NER, crisis detection, RAG, LLM report, dashboard |
