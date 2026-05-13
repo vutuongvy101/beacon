@@ -56,14 +56,14 @@ Monitor social media content, identify trends, analyze public sentiment, detect 
 
 ### Target Brand
 
-Choose one primary brand before Day 0. Dual-brand comparison is a **stretch-only** enhancement.
+**Primary brand (final):** OpenAI / ChatGPT. Dual-brand comparison is a **stretch-only** enhancement.
 
 **Technology (recommended)**
 
 | Brand | Why good for this system | Key subreddits / sources | Sentiment variation |
 | ----- | ------------------------ | ----------------------- | ------------------- |
-| **NVIDIA** ⭐ recommended | AI boom, GPU wars, strong community, directly relevant to course | r/nvidia, r/hardware, r/MachineLearning | High — gaming (positive) vs GPU pricing (negative) vs AI hype (mixed) |
-| OpenAI / ChatGPT | Course-relevant, huge LLM community, safety/pricing controversies | r/ChatGPT, r/OpenAI, r/artificial | High — enthusiasm vs concern vs backlash |
+| **OpenAI / ChatGPT** ⭐ recommended | Course-relevant, huge LLM community, safety/pricing controversies | r/ChatGPT, r/OpenAI, r/artificial | High — enthusiasm vs concern vs backlash |
+| NVIDIA | AI boom, GPU wars, strong community, directly relevant to course | r/nvidia, r/hardware, r/MachineLearning | High — gaming (positive) vs GPU pricing (negative) vs AI hype (mixed) |
 | Tesla | Extremely polarizing, product + CEO controversies, stock discourse | r/teslamotors, r/investing, r/elonmusk | Very high — easy crisis detection |
 | Apple | Global brand, product cycles, privacy debates, loyal community | r/apple, r/iphone, r/technology | Medium — mostly positive, spikes on launches |
 | AMD vs NVIDIA | Dual-brand rivalry — **stretch goal only** (see tier table in Section 1) | r/hardware, r/amd, r/nvidia, r/buildapc | High — brand war dynamics |
@@ -79,7 +79,7 @@ Choose one primary brand before Day 0. Dual-brand comparison is a **stretch-only
 | Spotify | Music + podcast, artist payout debates, AI music controversy | r/spotify, r/music | High — AI music discourse |
 | Peloton | Strong comeback story, crisis + recovery arc — great for crisis detection | r/pelotoncycle, r/fitness | Very high |
 
-**Decision:** `<REPLACE: chosen brand>` (primary) + optional dual-brand for stretch goal only.
+**Decision:** **OpenAI / ChatGPT** (primary) + optional dual-brand for stretch goal only.
 
 ---
 
@@ -160,7 +160,7 @@ Two architecture versions are planned — Core delivered by end of Week 2, Enhan
 ```
 [Data Layer]
   + Image / meme data (Reddit image posts, URLs scraped alongside text)
-  + Optional: Dual-brand corpus (e.g., NVIDIA + AMD) — stretch only
+  + Optional: Dual-brand corpus (e.g., OpenAI + Anthropic) — stretch only
         ↓
 [Preprocessing Layer]                          ← B1 + A7 enhanced
   + Image preprocessing (resize, caption extraction)
@@ -539,7 +539,7 @@ This section must be referenced in the report introduction and methodology secti
 **Decisions to lock before anyone writes code:**
 
 - Group ID confirmed
-- Brand confirmed (NVIDIA as primary, AMD for stretch only)
+- Brand confirmed (**OpenAI / ChatGPT** as primary; optional second brand for dual-brand stretch only, e.g. Anthropic)
 - LLM provider + model agreed (suggested: GPT-4o-mini or Gemini 1.5 Flash — cheap, fast)
 - Frontend choice locked: Streamlit vs Gradio vs HTML/CSS/JS (see Section 4 Output Layer)
 - Reddit scraper script working (self-developed, throttled, saves JSON snapshots)
@@ -549,7 +549,7 @@ This section must be referenced in the report introduction and methodology secti
 - `shared/data_loader.py` written and pushed (one person, ~1h)
 - `shared/config.py` template pushed (API key slots, gitignored actual keys, demo mode flag)
 - `evaluation/metrics.py` skeleton created (metric helper stubs)
-- Sample dataset prepared: 5,000 rows from Sentiment140 + 500 scraped Reddit posts for chosen brand
+- Sample dataset prepared: 5,000 rows from Sentiment140 + 500 scraped Reddit posts for OpenAI / ChatGPT
 
 ---
 
@@ -621,7 +621,7 @@ This section must be referenced in the report introduction and methodology secti
 | Human evaluation: 20–30 sampled outputs rated 1–5 on 4 criteria (see Section 8) | Core polish | Report quality |
 | Add LLM-as-judge automated evaluation for A1/A3 outputs | **Stretch** | Only if A7 is complete |
 | A4: Multilingual notebook | **Stretch** | Only if all core + A7 complete |
-| Dual-brand analysis (e.g., NVIDIA vs AMD) | **Stretch** | Only if A4 complete |
+| Dual-brand analysis (e.g., OpenAI vs Anthropic) | **Stretch** | Only if A4 complete |
 | Reproducibility pass: fresh clone + README clean run | Required | Submission requirement |
 | Report final draft: all sections complete, figures polished | Required | Report marks |
 | Presentation slides finalized (≤5 min, all members have speaking role) | Required | Presentation marks |
@@ -681,10 +681,11 @@ Target: ≤5,000 words, PDF.
 
 ## 14. Key Decisions Still Open
 
+**Locked:** Primary monitoring brand — **OpenAI / ChatGPT** (see Section 3).
+
 These must be resolved at Pre-Phase Day 0:
 
 - Group ID / team name
-- **Target brand confirmed** (see candidate tables in Section 3)
 - LLM provider + model (GPT-4o-mini vs Gemini 1.5 Flash vs other)
 - **Frontend choice locked:** Streamlit vs Gradio vs HTML/CSS/JS (see Section 4 Output Layer)
 - Notebook assignments (who owns which)
@@ -700,7 +701,7 @@ These must be resolved at Pre-Phase Day 0:
 
 Reddit posts regularly include images (memes, screenshots, product photos) — making it a natural fit for multimodal analysis even without a separate image dataset.
 
-**Why it is the primary differentiator over multilingual:** A meme post may say "NVIDIA is amazing" but show a GPU pricing chart with a crying face. Text-only analysis classifies this as positive; multimodal catches the irony. Multimodal analysis is more visually compelling for the demo, more technically distinctive, and more directly relevant to modern social media behaviour than multilingual support.
+**Why it is the primary differentiator over multilingual:** A meme post may say "ChatGPT is amazing" but show a subscription-pricing or outage screenshot with negative framing. Text-only analysis classifies this as positive; multimodal catches the irony. Multimodal analysis is more visually compelling for the demo, more technically distinctive, and more directly relevant to modern social media behaviour than multilingual support.
 
 **Benchmark design (20–50 Reddit image posts):**
 - Collect posts containing images from brand subreddits (image URLs scraped alongside post text)
@@ -710,8 +711,8 @@ Reddit posts regularly include images (memes, screenshots, product photos) — m
 - Report cases where modality changes the result — these are the most compelling for the report and demo
 
 **Example cases to target:**
-- Sarcastic meme where text looks positive but image is negative (e.g., GPU pricing chart + crying emoji)
-- GPU pricing screenshot where image contains text not present in the post caption
+- Sarcastic meme where text looks positive but image is negative (e.g., Plus pricing / model-capability chart + negative reaction meme)
+- Product UI or policy screenshot where embedded text contradicts or nuances the post caption
 - Product announcement meme with ironic comparison to competitor
 - Customer complaint posted as a screenshot rather than typed text
 
