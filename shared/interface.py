@@ -1,15 +1,16 @@
 """Stubs documenting Phase 1 exported function contracts (see planning.md Section 7).
 
 Implement the real functions inside each notebook (or pipeline modules), not here.
+
+B1 ``preprocess`` and ``build_doc`` are implemented in ``shared.preprocess`` and
+re-exported here so callers can import from either module.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-
-def preprocess(texts: list[str]) -> list[str]:
-    raise NotImplementedError
+from shared.preprocess import build_doc, preprocess
 
 
 def extract_entities(text: str) -> dict[str, Any]:
@@ -24,7 +25,12 @@ def classify_sentiment(texts: list[str]) -> list[str]:
     raise NotImplementedError
 
 
-def detect_topics(texts: list[str]) -> list[dict[str, Any]]:
+def detect_topics(
+    texts: list[str],
+    max_topics: int | None = None,
+    top_n_words: int = 10,
+    rep_docs_per_topic: int = 3,
+) -> list[dict[str, Any]]:
     raise NotImplementedError
 
 
