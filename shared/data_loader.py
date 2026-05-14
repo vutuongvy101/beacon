@@ -17,7 +17,6 @@ from typing import Any
 
 from shared.config import get_data_dir
 
-# ── internal helpers ──────────────────────────────────────────────────────────
 
 def _snapshot_dir() -> Path:
     return get_data_dir() / "snapshots"
@@ -48,7 +47,6 @@ def _to_df(records: list[dict[str, Any]]):
         df["created_utc"] = pd.to_datetime(df["created_utc"], utc=True, errors="coerce")
     return df
 
-# ── public API ────────────────────────────────────────────────────────────────
 
 def load_reddit(
     brand: str = "openai",
