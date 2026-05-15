@@ -14,7 +14,6 @@ from umap import UMAP
 
 from shared.preprocess import preprocess
 
-# ── Corpus (notebook §3.0) ───────────────────────────────────────────────────
 
 SAMPLE_N = 400
 MONTHS_RECENT = 6
@@ -24,7 +23,6 @@ DOMAIN_STOPWORDS = {
     "also", "one", "even", "know", "people", "way", "make", "time", "good",
 }
 
-# ── Models ─────────────────────────────────────────────────────────────────────
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 NUM_TOPICS_LDA = 8
