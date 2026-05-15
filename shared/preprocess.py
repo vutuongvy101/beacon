@@ -36,36 +36,24 @@ def preprocess(texts: list[str]) -> list[str]:
 def build_doc(post: Mapping[str, Any]) -> str:
     """Assemble one document string from a Reddit-style post record.
 
-    Expects keys ``title``, ``selftext``, and ``top_comments`` (list of dicts
+    Expects keys `text`, and `top_comments` (list of dicts
     with ``body``), as produced by the Reddit scraper / ``load_sample``.
-
-    * If ``selftext`` is longer than 20 characters, appends selftext plus the
-      first two top comments (reduces topic drift toward thread reactions).
-    * Otherwise (image-only / link posts), appends all available top comments
-      so short titles still carry topical signal.
-
-    Callers should run :func:`preprocess` on the returned strings before topic
-    modelling or sentiment, so URLs in comment bodies are stripped.
     """
-    title = str(post.get("title") or "").strip()
-    parts: list[str] = [title] if title else []
-
-    selftext = str(post.get("selftext") or "").strip()
+    text = str(post.get("text") or "").strip()
     raw_comments = post.get("top_comments")
     comments: list[Any] = raw_comments if isinstance(raw_comments, list) else []
+    
+    SECTION_SEP = "\n\n[COMMENT]\n"
 
-    if len(selftext) > 20:
-        parts.append(selftext)
-        for c in comments[:2]:
-            if isinstance(c, Mapping):
-                body = str(c.get("body") or "").strip()
-                if body:
-                    parts.append(body)
-    else:
-        for c in comments:
-            if isinstance(c, Mapping):
-                body = str(c.get("body") or "").strip()
-                if body:
-                    parts.append(body)
+    # then in build_doc:
+    comment_parts = []
+    for c in comments:
+        body = str(c.get("body") or "").strip()
+        if body:
+            comment_parts.append(body)
 
-    return " ".join(parts)
+    sections = [text]
+    if comment_parts:
+        sections.append(SECTION_SEP.join(comment_parts))
+
+    return "\n\n".join(sections)
