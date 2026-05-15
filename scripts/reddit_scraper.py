@@ -168,6 +168,36 @@ def append_record(path: Path, record: dict) -> None:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def count_by_subreddit(records: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for rec in records:
+        sub = rec["subreddit"]
+        counts[sub] = counts.get(sub, 0) + 1
+    return counts
+
+
+def per_subreddit_targets(subreddits: list[str], limit: int) -> dict[str, int]:
+    """Split *limit* evenly across subreddits (remainder → first subs)."""
+    n = len(subreddits)
+    base, rem = divmod(limit, n)
+    return {
+        sub: base + (1 if i < rem else 0)
+        for i, sub in enumerate(subreddits)
+    }
+
+
+def remaining_per_subreddit(
+    subreddits: list[str],
+    limit: int,
+    collected: dict[str, int],
+) -> dict[str, int]:
+    targets = per_subreddit_targets(subreddits, limit)
+    return {
+        sub: max(0, targets[sub] - collected.get(sub, 0))
+        for sub in subreddits
+    }
+
+
 
 def crawl(
     subreddits: list[str],
@@ -189,73 +219,116 @@ def crawl(
     for rec in records:
         seen_ids.add(rec["post_id"])
 
-    for subreddit in subreddits:
-        if len(records) >= limit:
+    targets   = per_subreddit_targets(subreddits, limit)
+    remaining = remaining_per_subreddit(subreddits, limit, count_by_subreddit(records))
+
+    print("Per-subreddit targets:")
+    for sub in subreddits:
+        have = targets[sub] - remaining[sub]
+        print(f"  r/{sub}: {have}/{targets[sub]}")
+
+    # Round-robin: one listing page per subreddit per pass so no single sub fills the quota first.
+    # sort_i / after track pagination per subreddit independently.
+    sort_i: dict[str, int] = {sub: 0 for sub in subreddits}
+    after: dict[str, str | None] = {sub: None for sub in subreddits}
+
+    while sum(remaining.values()) > 0:
+        progressed = False
+
+        for subreddit in subreddits:
+            need = remaining[subreddit]
+            if need <= 0:
+                continue
+
+            si = sort_i[subreddit]
+            if si >= len(SORT_MODES):
+                continue
+
+            sort = SORT_MODES[si]
+            posts, next_after = fetch_posts(subreddit, sort, after=after[subreddit])
+            after[subreddit] = next_after
+
+            if not posts:
+                if next_after is None:
+                    sort_i[subreddit] += 1
+                    after[subreddit] = None
+                    print(f"  r/{subreddit}: exhausted sort={sort}")
+                continue
+
+            progressed = True
+            saved_this_page = 0
+
+            for post in posts:
+                if remaining[subreddit] <= 0:
+                    break
+
+                p       = post["data"]
+                post_id = p.get("id", "")
+
+                if not post_id or post_id in seen_ids:
+                    continue
+                if p.get("created_utc", 0) < cutoff_ts:
+                    continue
+                if p.get("score", 0) < min_score:
+                    continue
+                if p.get("num_comments", 0) < min_comments:
+                    continue
+
+                title    = clean_text(p.get("title", ""))
+                selftext = clean_text(p.get("selftext", ""))
+
+                time.sleep(1)  # brief pause before comment fetch to avoid burst rate-limiting
+                record = {
+                    "post_id":      post_id,
+                    "title":        title,
+                    "selftext":     selftext,
+                    "text":         f"{title} {selftext}".strip(),
+                    "subreddit":    subreddit,
+                    "score":        p.get("score", 0),
+                    "num_comments": p.get("num_comments", 0),
+                    "created_utc":  datetime.utcfromtimestamp(
+                                        p.get("created_utc", 0)
+                                    ).isoformat(),
+                    "url":          f"https://reddit.com{p.get('permalink', '')}",
+                    "image_url":    extract_image_url(p),
+                    "top_comments": fetch_top_comments(subreddit, post_id, top_comments),
+                }
+
+                append_record(output_path, record)
+                record_seen_id(ids_path, post_id)
+                records.append(record)
+                seen_ids.add(post_id)
+                remaining[subreddit] -= 1
+                saved_this_page += 1
+
+                n = len(records)
+                if n % 25 == 0 or n <= 3:
+                    print(
+                        f"  [{n}/{limit}] r/{subreddit} "
+                        f"({targets[subreddit] - remaining[subreddit]}/{targets[subreddit]})"
+                    )
+
+                time.sleep(SLEEP_SEC)
+
+            if saved_this_page:
+                print(
+                    f"  r/{subreddit} sort={sort}: +{saved_this_page} "
+                    f"({targets[subreddit] - remaining[subreddit]}/{targets[subreddit]})"
+                )
+
+            if next_after is None:
+                sort_i[subreddit] += 1
+                after[subreddit] = None
+
+        if not progressed:
+            print("\nNo more posts available from any subreddit.")
             break
-        print(f"\n── r/{subreddit} ──")
-
-        for sort in SORT_MODES:
-            if len(records) >= limit:
-                break
-            print(f"  sort={sort}")
-            after = None
-
-            while len(records) < limit:
-                posts, after = fetch_posts(subreddit, sort, after=after)
-                if not posts:
-                    break
-
-                for post in posts:
-                    if len(records) >= limit:
-                        break
-
-                    p       = post["data"]
-                    post_id = p.get("id", "")
-
-                    if not post_id or post_id in seen_ids:
-                        continue
-                    if p.get("created_utc", 0) < cutoff_ts:
-                        continue
-                    if p.get("score", 0) < min_score:
-                        continue
-                    if p.get("num_comments", 0) < min_comments:
-                        continue
-
-                    title    = clean_text(p.get("title", ""))
-                    selftext = clean_text(p.get("selftext", ""))
-
-                    time.sleep(1)  # brief pause before comment fetch to avoid burst rate-limiting
-                    record = {
-                        "post_id":      post_id,
-                        "title":        title,
-                        "selftext":     selftext,
-                        "text":         f"{title} {selftext}".strip(),
-                        "subreddit":    subreddit,
-                        "score":        p.get("score", 0),
-                        "num_comments": p.get("num_comments", 0),
-                        "created_utc":  datetime.utcfromtimestamp(
-                                            p.get("created_utc", 0)
-                                        ).isoformat(),
-                        "url":          f"https://reddit.com{p.get('permalink', '')}",
-                        "image_url":    extract_image_url(p),
-                        "top_comments": fetch_top_comments(subreddit, post_id, top_comments),
-                    }
-
-                    append_record(output_path, record)
-                    record_seen_id(ids_path, post_id)
-                    records.append(record)
-                    seen_ids.add(post_id)
-
-                    n, pct = len(records), 100 * len(records) / limit
-                    if n % 25 == 0 or n <= 3:
-                        print(f"  [{n}/{limit}] ({pct:.0f}%)")
-
-                    time.sleep(SLEEP_SEC)
-
-                if after is None:
-                    break
 
     print(f"\nDone. {len(records)} posts saved → {output_path}")
+    print("Final per-subreddit counts:")
+    for sub in subreddits:
+        have = targets[sub] - remaining[sub]
+        print(f"  r/{sub}: {have}/{targets[sub]}")
 
 
 
