@@ -35,7 +35,7 @@ from shared.config import get_data_dir  # noqa: E402
 
 
 
-DEFAULT_SUBREDDITS  = ["codex", "OpenAI", "ChatGPT", "artificial"]
+DEFAULT_SUBREDDITS  = ["OpenAI", "ChatGPT", "codex", "dalle2"]
 DEFAULT_LIMIT       = 500
 DEFAULT_MIN_SCORE   = 200
 DEFAULT_MIN_COMMENTS = 30
