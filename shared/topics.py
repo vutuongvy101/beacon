@@ -1,10 +1,11 @@
-"""B5 topic detection — BERTopic config and ``detect_topics()`` for pipeline + notebooks."""
+"""B5 topic detection — BERTopic config, corpus selection, and pipeline exports."""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+import numpy as np
+import pandas as pd
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction import text as _ft
@@ -16,14 +17,7 @@ from shared.preprocess import preprocess
 # ── Corpus (notebook §3.0) ───────────────────────────────────────────────────
 
 SAMPLE_N = 400
-FILTER_TO_PRODUCT = True
-
-PRODUCT_KEYWORDS = re.compile(
-    r"\b(chatgpt|gpt-?4|gpt-?4o|o1|o3|api|subscription|plus|pro\b|dall-?e|sora|"
-    r"whisper|codex|plugin|custom\s*gpt|rate\s*limit|jailbreak|"
-    r"model|prompt|token|billing|outage|downgrade|upgrade)\b",
-    re.IGNORECASE,
-)
+MONTHS_RECENT = 6
 
 DOMAIN_STOPWORDS = {
     "openai", "like", "just", "use", "really", "think", "would", "get",
@@ -41,31 +35,32 @@ BERTOPIC_MIN_DF = 2
 BERTOPIC_MAX_DF = 0.90
 DEFAULT_RANDOM_SEED = 42
 
-# Heuristic labels for product-area mapping (§4.1b)
-PRODUCT_AREA_RULES: list[tuple[str, re.Pattern[str]]] = [
-    ("API / developer", re.compile(r"\b(api|rate limit|token|sdk|endpoint|codex)\b", re.I)),
-    ("ChatGPT / consumer", re.compile(r"\b(chatgpt|custom gpt|plus|subscription|voice|gpt)\b", re.I)),
-    ("Images / multimodal", re.compile(r"\b(dall-?e|image|photo|picture|sora|video)\b", re.I)),
-    ("Model behaviour", re.compile(r"\b(jailbreak|prompt|model|hallucin|reasoning)\b", re.I)),
-    ("Pricing / billing", re.compile(r"\b(billing|price|subscription|plus|pro)\b", re.I)),
-    ("Reliability", re.compile(r"\b(outage|down|error|limit|latency)\b", re.I)),
-]
 
+def select_corpus_df(
+    df: pd.DataFrame,
+    *,
+    n: int = SAMPLE_N,
+    months: int = MONTHS_RECENT,
+) -> pd.DataFrame:
+    """Keep posts from the last *months* (relative to max ``created_utc``), then *n* most recent."""
+    out = df.copy()
+    out["created_utc"] = pd.to_datetime(out["created_utc"], utc=True, errors="coerce")
+    out = out.dropna(subset=["created_utc"])
+    if out.empty:
+        return out
 
-def is_product_related(text: str) -> bool:
-    return bool(PRODUCT_KEYWORDS.search(text or ""))
+    end = out["created_utc"].max()
+    start = end - pd.DateOffset(months=months)
+    windowed = out[out["created_utc"] >= start]
+    return (
+        windowed.sort_values("created_utc", ascending=False)
+        .head(n)
+        .reset_index(drop=True)
+    )
 
 
 def min_topic_size(n_docs: int) -> int:
     return max(3, n_docs // 20)
-
-
-def guess_product_area(keywords: list[str]) -> str:
-    blob = " ".join(keywords).lower()
-    for label, pattern in PRODUCT_AREA_RULES:
-        if pattern.search(blob):
-            return label
-    return "General product discussion"
 
 
 def make_umap_model(random_state: int = DEFAULT_RANDOM_SEED) -> UMAP:
@@ -86,8 +81,8 @@ def fit_bertopic(
     texts: list[str],
     *,
     random_state: int = DEFAULT_RANDOM_SEED,
-) -> BERTopic:
-    """Fit BERTopic with canonical §3.0 / pipeline settings."""
+) -> tuple[BERTopic, list[int], np.ndarray | None]:
+    """Fit BERTopic and return ``(model, topic_ids_per_doc, probabilities_or_None)``."""
     embedder = SentenceTransformer(EMBEDDING_MODEL)
     model = BERTopic(
         embedding_model=embedder,
@@ -97,8 +92,52 @@ def fit_bertopic(
         vectorizer_model=make_bertopic_vectorizer(),
         verbose=False,
     )
-    model.fit_transform(texts)
-    return model
+    topics, probs = model.fit_transform(texts)
+    topic_list = [int(t) for t in topics]
+    return model, topic_list, probs
+
+
+def _keywords_for_topic(model: BERTopic, topic_id: int, top_n_words: int) -> list[str]:
+    topic_words = model.get_topic(topic_id) or []
+    return [w for w, _ in topic_words][:top_n_words]
+
+
+def assign_thread_topics(
+    model: BERTopic,
+    topics: list[int],
+    probs: np.ndarray | list | None = None,
+    *,
+    top_n_words: int = 10,
+) -> list[dict[str, Any] | None]:
+    """Assign one topic per document from BERTopic hard labels.
+
+    Topic ``-1`` (HDBSCAN outlier) maps to ``None``. Otherwise returns
+    ``{topic_id, keywords, confidence}``.
+    """
+    results: list[dict[str, Any] | None] = []
+
+    for i, raw in enumerate(topics):
+        tid = int(raw)
+        if tid == -1:
+            results.append(None)
+            continue
+
+        confidence = 1.0
+        if probs is not None:
+            row = probs[i]
+            if isinstance(row, (list, np.ndarray)):
+                arr = np.asarray(row, dtype=float).ravel()
+                confidence = float(arr.max()) if arr.size else 1.0
+            else:
+                confidence = float(row)
+
+        results.append({
+            "topic_id": tid,
+            "keywords": _keywords_for_topic(model, tid, top_n_words),
+            "confidence": confidence,
+        })
+
+    return results
 
 
 def detect_topics(
@@ -108,29 +147,27 @@ def detect_topics(
     rep_docs_per_topic: int = 3,
     random_state: int = DEFAULT_RANDOM_SEED,
 ) -> list[dict[str, Any]]:
-    """Detect topics from social posts using BERTopic (exported B5 contract).
+    """Detect corpus-level topics using BERTopic (exported B5 contract).
 
-    Each input string should be built with ``shared.preprocess.build_doc`` and
-    URL-stripped with ``shared.preprocess.preprocess`` upstream.
+    Returns ``[{topic_id, keywords, posts}, ...]``. Per-thread labels use
+    ``assign_thread_topics()`` on the same fitted model.
     """
     cleaned = preprocess(list(texts))
     if len(cleaned) < 5:
         return []
 
-    model = fit_bertopic(cleaned, random_state=random_state)
+    model, _, _ = fit_bertopic(cleaned, random_state=random_state)
     results: list[dict[str, Any]] = []
     for _, row in model.get_topic_info().iterrows():
         tid = int(row["Topic"])
         if tid == -1:
             continue
-        topic_words = model.get_topic(tid) or []
-        keywords = [w for w, _ in topic_words][:top_n_words]
+        keywords = _keywords_for_topic(model, tid, top_n_words)
         rep_docs = model.get_representative_docs(tid) or []
         results.append({
             "topic_id": tid,
             "keywords": keywords,
             "posts": rep_docs[:rep_docs_per_topic],
-            "product_area": guess_product_area(keywords),
         })
 
     if max_topics is not None:

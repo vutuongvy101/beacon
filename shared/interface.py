@@ -1,9 +1,8 @@
-"""Stubs documenting Phase 1 exported function contracts (see planning.md Section 7).
+"""Phase 1 exported function contracts (see planning.md Section 7).
 
-Implement the real functions inside each notebook (or pipeline modules), not here.
-
-B1 ``preprocess`` and ``build_doc`` are implemented in ``shared.preprocess`` and
-re-exported here so callers can import from either module.
+B1 ``preprocess`` / ``build_doc`` → ``shared.preprocess``.
+B5 ``detect_topics`` → ``shared.topics``.
+Other symbols remain stubs until their notebooks land.
 """
 
 from __future__ import annotations
@@ -31,7 +30,20 @@ def detect_topics(
     top_n_words: int = 10,
     rep_docs_per_topic: int = 3,
 ) -> list[dict[str, Any]]:
-    raise NotImplementedError
+    from shared.topics import detect_topics as _detect_topics
+
+    return _detect_topics(
+        texts,
+        max_topics=max_topics,
+        top_n_words=top_n_words,
+        rep_docs_per_topic=rep_docs_per_topic,
+    )
+
+
+def assign_thread_topics(model: Any, topics: list[int], probs: Any = None, **kwargs: Any) -> list[dict[str, Any] | None]:
+    from shared.topics import assign_thread_topics as _assign_thread_topics
+
+    return _assign_thread_topics(model, topics, probs, **kwargs)
 
 
 def classify_sentiment_ft(texts: list[str]) -> list[str]:
