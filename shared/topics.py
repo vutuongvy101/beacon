@@ -15,9 +15,6 @@ from umap import UMAP
 from shared.preprocess import preprocess
 
 
-SAMPLE_N = 400
-MONTHS_RECENT = 6
-
 DOMAIN_STOPWORDS = {
     "openai", "like", "just", "use", "really", "think", "would", "get",
     "also", "one", "even", "know", "people", "way", "make", "time", "good",
@@ -25,9 +22,6 @@ DOMAIN_STOPWORDS = {
 
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-NUM_TOPICS_LDA = 8
-NUM_TOPICS_KMEANS = 8
-LDA_PASSES = 15
 BERTOPIC_NGRAM_RANGE = (1, 2)
 BERTOPIC_MIN_DF = 2
 BERTOPIC_MAX_DF = 0.90
@@ -37,8 +31,8 @@ DEFAULT_RANDOM_SEED = 42
 def select_corpus_df(
     df: pd.DataFrame,
     *,
-    n: int = SAMPLE_N,
-    months: int = MONTHS_RECENT,
+    n: int,
+    months: int,
 ) -> pd.DataFrame:
     """Keep posts from the last *months* (relative to max ``created_utc``), then *n* most recent."""
     out = df.copy()
@@ -58,7 +52,9 @@ def select_corpus_df(
 
 
 def min_topic_size(n_docs: int) -> int:
-    return max(3, n_docs // 20)
+    # //20 was too aggressive (gives 30 for 600 docs, leaving only 2 topics).
+    # //50 gives ~12 for 600 docs, matching BERTopic's recommended 10–15 floor.
+    return max(5, n_docs // 50)
 
 
 def make_umap_model(random_state: int = DEFAULT_RANDOM_SEED) -> UMAP:
