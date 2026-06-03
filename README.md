@@ -120,6 +120,20 @@ python scripts/export_dashboard_inputs.py --fast
 cd frontend && python -m http.server 5500
 ```
 
+**Windows (PowerShell) step-by-step:**
+
+```powershell
+# 1. Activate venv
+beacon-env\Scripts\activate
+
+# 2. Export data JSONs
+python scripts/export_dashboard_inputs.py --fast
+
+# 3. Start the server
+uvicorn backend.main:app --reload
+# → http://localhost:8000
+```
+
 **Refresh data** after notebooks produce new outputs:
 
 ```bash
