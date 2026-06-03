@@ -2,10 +2,8 @@
 shared/preprocessing.py — Reddit text preprocessing for the Beacon system.
 
 This module is the single source of truth for text cleaning across the project.
-It exposes three preprocessing entry points (clean_for_ner, clean_for_llm,
-preprocess) plus helpers for signal extraction and length filtering. Each
-entry point produces a *different* form of the text because downstream
-techniques have different requirements — see the QUICK REFERENCE below.
+It exposes two preprocessing entry points (clean_for_ner, clean_for_llm) plus
+helpers for signal extraction, normalization, and length filtering.
 
 QUICK REFERENCE FOR NOTEBOOK AUTHORS
 =====================================
@@ -21,16 +19,16 @@ Not sure which function to use? Find your notebook below.
         texts   = clean_for_ner(raw_texts)                 # clean prose for spaCy Matcher
 
     B4 (Sentiment ML):
-        from shared.preprocessing import preprocess
-        texts = preprocess(raw_texts)            # lemmatized strings for BoW/TF-IDF
+        from shared.preprocessing import normalize, clean_for_ner
+        texts = [normalize(strip_signals(clean_reddit_markdown(t))) for t in raw_texts]
 
     B5 (Topic clustering):
-        from shared.preprocessing import preprocess
-        texts = preprocess(raw_texts)            # same as B4 — for LDA/BERTopic input
+        from shared.preprocessing import clean_for_llm
+        texts = clean_for_llm(raw_texts)         # readable cleaned prose for topic models
 
     A1 (LLM fine-tuning + prompting):
         from shared.preprocessing import clean_for_llm
-        texts = clean_for_llm(raw_texts)         # readable prose — do NOT lemmatize
+        texts = clean_for_llm(raw_texts)         # readable prose
 
     A2 (RAG — indexing AND query time):
         from shared.preprocessing import clean_for_llm
@@ -41,12 +39,11 @@ Not sure which function to use? Find your notebook below.
         texts = clean_for_llm(raw_texts)         # same as A1/A2
 
     A5 (Crisis detection):
-        from shared.preprocessing import clean_for_llm, preprocess
-        # LLM path  → clean_for_llm()   (readable prose for Qwen)
-        # Rule path → preprocess()      (lemmatized tokens for keyword threshold)
+        from shared.preprocessing import clean_for_llm
+        texts = clean_for_llm(raw_texts)         # readable prose for LLM classifier
 
     A6 (Pipeline orchestrator):
-        # Routes through the three entry points above based on the agent in question.
+        # Routes through the entry points above based on the agent in question.
 
 LOADING DATA (all notebooks):
     from shared.data_loader import load_sample
@@ -57,8 +54,8 @@ OUTPUT ARTIFACT
 Running this module as a script (``python shared/preprocessing.py``) regenerates
 ``data/snapshots/reddit_openai_clean.jsonl`` — one JSON record per line so
 ``wc -l`` gives an instant row count. Each record carries the original scraper
-fields plus three precomputed variants (``text_for_ner``, ``text_for_llm``,
-``text_preprocessed``) and the structured ``signals`` dict.
+fields plus precomputed variants (``text_for_ner``, ``text_for_llm``,
+``text_normalized``) and the structured ``signals`` dict.
 """
 
 from __future__ import annotations
@@ -68,57 +65,14 @@ import re
 import sys
 from pathlib import Path
 
-# Third-party — failures here give a clear message rather than a stack trace.
 try:
-    import nltk
-    import spacy
     import contractions
     import emoji as emoji_lib
-    from nltk.corpus import stopwords
-    from nltk.stem import WordNetLemmatizer
-    from nltk.tokenize import word_tokenize
-    from nltk import pos_tag as _pos_tag
-    from nltk.corpus import wordnet as _wordnet
 except ImportError as _e:
     raise SystemExit(
         f"Missing dependency: {_e}\n"
-        "Run:  pip install -r requirements.txt\n"
-        "Also: python -m spacy download en_core_web_sm"
+        "Run:  pip install -r requirements.txt"
     ) from _e
-
-
-# ── one-time model / corpus initialisation ────────────────────────────────────
-# Done at import time so notebooks don't repeat it. NLTK downloads are idempotent
-# (no-op if already present) and quiet=True suppresses progress chatter.
-
-for _pkg in ("punkt", "punkt_tab", "stopwords", "wordnet", "averaged_perceptron_tagger"):
-    try:
-        nltk.download(_pkg, quiet=True)
-    except Exception:
-        # Network may be unavailable in a marker's sandbox. Downstream calls will
-        # error out clearly if the corpus is genuinely missing.
-        pass
-
-try:
-    _NLP = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-except OSError:
-    import subprocess
-    subprocess.run(
-        [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
-        check=True,
-    )
-    _NLP = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-
-_LEMMATIZER = WordNetLemmatizer()
-
-# Critical design choice — KEEP negation words. Default stopword removal strips
-# "not" / "no" / "never", which destroys sentiment polarity ("not good" reads as
-# positive after removal). See justification in B1 notebook §6.
-_NEGATION_WORDS: set[str] = {
-    "not", "no", "never", "without", "nothing", "nobody",
-    "none", "nor", "cannot", "neither",
-}
-_STOPWORDS: set[str] = set(stopwords.words("english")) - _NEGATION_WORDS
 
 
 # ── pre-compiled regex patterns (≈10× faster than re.compile per call) ────────
@@ -137,8 +91,6 @@ _RE_REDDIT_USER      = re.compile(r"(?:^|\s)(/?u/\w+)", re.IGNORECASE)
 _RE_REDDIT_SUB       = re.compile(r"(?:^|\s)(/?r/\w+)", re.IGNORECASE)
 _RE_TWITTER_MENTION  = re.compile(r"(?<!\w)@\w+")                 # @sama (cross-posted content)
 
-_RE_TOKEN_SIMPLE     = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", re.IGNORECASE)
-
 
 # ── Stage 1: structural cleaning ──────────────────────────────────────────────
 
@@ -147,12 +99,10 @@ def clean_reddit_markdown(text: str) -> str:
 
     Preserves the visible content (link text, bold/italic text) but removes the
     markdown syntax around it. Code fences are replaced with ``[CODE]`` rather
-    than deleted so B5 topic clustering can still detect "troubleshooting" or
-    "API usage" as a distinct topic without being dominated by code vocabulary.
+    than deleted so downstream techniques can still detect code-related content.
 
     Called by:
-        Internal — used by clean_for_ner, clean_for_llm, and preprocess as
-        the first cleaning pass.
+        Internal — used by clean_for_ner and clean_for_llm as the first pass.
     """
     if not text:
         return ""
@@ -204,7 +154,7 @@ def strip_signals(text: str) -> str:
     """Remove URLs, hashtags, and mentions from text after extracting them.
 
     Called by:
-        Internal — used by clean_for_ner, clean_for_llm, and preprocess after
+        Internal — used by clean_for_ner and clean_for_llm after
         extract_signals() has already captured the structured content.
     """
     if not text:
@@ -222,20 +172,19 @@ def strip_signals(text: str) -> str:
 def normalize(text: str, emoji_strategy: str = "to_text") -> str:
     """Lowercase, expand contractions, handle emoji.
 
-    Contractions are expanded ("don't" → "do not") so that the negation marker
-    "not" survives stopword removal downstream. This is critical for B4
-    sentiment — see B1 notebook §6 for the justification.
+    Contractions are expanded ("don't" → "do not") so negation markers like
+    "not" remain explicit in the text for downstream sentiment analysis.
 
     Args:
         emoji_strategy: ``"to_text"`` (🔥 → "fire"), ``"strip"`` (remove
             entirely), or ``"keep"`` (no-op). Default is ``"to_text"`` so
-            sentiment-carrying emoji survive as searchable tokens.
+            sentiment-carrying emoji survive as searchable text.
 
     Called by:
-        Internal — used by preprocess() as the third pipeline stage.
+        Internal — available for notebooks that need fully normalised text.
         Not called by clean_for_ner (NER needs original capitalisation).
-        Not called by clean_for_llm in lowercase mode (LLMs handle case
-        themselves; we only need contraction + emoji handling there).
+        Not called directly by clean_for_llm (which applies contraction + emoji
+        handling inline without lowercasing).
     """
     if not text:
         return ""
@@ -248,81 +197,13 @@ def normalize(text: str, emoji_strategy: str = "to_text") -> str:
     return _RE_MULTI_WHITESPACE.sub(" ", text).strip()
 
 
-# ── Stage 4: tokenization (three modes) ───────────────────────────────────────
-
-def tokenize_spacy(text: str) -> list[str]:
-    """spaCy tokenizer — preserves hyphenated tech terms (gpt-5, text-davinci-003).
-
-    Slowest of the three tokenizers but produces the cleanest output for
-    OpenAI-related Reddit content. See B1 notebook §5 comparison table.
-    """
-    return [tok.text for tok in _NLP(text) if not tok.is_space]
-
-
-def tokenize_nltk(text: str) -> list[str]:
-    """NLTK Punkt tokenizer — fast baseline; splits some hyphenated terms."""
-    return word_tokenize(text)
-
-
-def tokenize_regex(text: str) -> list[str]:
-    """Regex tokenizer — fastest; preserves [a-z0-9-_] sequences. No punctuation."""
-    return _RE_TOKEN_SIMPLE.findall(text)
-
-
-# ── Stage 5: stopword removal + lemmatization ─────────────────────────────────
-
-def _get_wordnet_pos(treebank_tag: str) -> str:
-    """Convert Penn Treebank POS tag to WordNet POS tag."""
-    if treebank_tag.startswith("J"):
-        return _wordnet.ADJ
-    elif treebank_tag.startswith("V"):
-        return _wordnet.VERB
-    elif treebank_tag.startswith("R"):
-        return _wordnet.ADV
-    else:
-        return _wordnet.NOUN  # default
-
-def remove_stopwords_and_lemmatize(tokens: list[str]) -> list[str]:
-    """Drop stopwords (preserving negation words) and lemmatize the rest.
-
-    Uses Penn Treebank POS tagging before lemmatisation so that verbs
-    (pricing → price), adjectives (capable → capable), and adverbs are
-    lemmatised correctly — not just nouns. Without POS tagging, WordNet
-    defaults to noun lemmatisation and misses verb/adjective forms.
-
-    Filters out:
-    - Standard English stopwords EXCEPT negation words (see _NEGATION_WORDS).
-    - Single-character tokens (except "i").
-    - Tokens with no alphanumeric content (pure punctuation).
-
-    Called by:
-        Internal — used by preprocess() as the final pipeline stage.
-    """
-    out: list[str] = []
-    # Filter first, then POS-tag only the surviving tokens (faster)
-    candidates = []
-    for t in tokens:
-        if t in _STOPWORDS:
-            continue
-        if len(t) < 2 and t != "i":
-            continue
-        if not re.search(r"[a-z0-9]", t):
-            continue
-        candidates.append(t)
-
-    if not candidates:
-        return []
-
-    # POS-tag all candidates in one batch call (much faster than per-token)
-    tagged = _pos_tag(candidates)
-    for token, tag in tagged:
-        wn_pos = _get_wordnet_pos(tag)
-        out.append(_LEMMATIZER.lemmatize(token, pos=wn_pos))
-    return out
+def _normalize_text(text: str) -> str:
+    """Apply markdown cleaning, signal removal, and full normalisation."""
+    return normalize(strip_signals(clean_reddit_markdown(text)))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  PUBLIC ENTRY POINTS — these are the three functions notebooks should call.
+#  PUBLIC ENTRY POINTS — these are the functions notebooks should call.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def clean_for_ner(texts: list[str]) -> list[str]:
@@ -330,7 +211,7 @@ def clean_for_ner(texts: list[str]) -> list[str]:
 
     Strips markdown, code fences, URLs, hashtags, and Reddit mentions,
     but PRESERVES original capitalisation and sentence structure. Does NOT
-    lowercase, lemmatize, or remove stopwords.
+    lowercase or apply full normalisation.
 
     Capitalisation is critical for spaCy NER — "OpenAI" and "Sam Altman" are
     recognised as entities because of their casing. Passing lowercased text to
@@ -359,13 +240,10 @@ def clean_for_llm(texts: list[str]) -> list[str]:
     """Clean Reddit posts into readable prose for LLM and embedding inputs.
 
     Strips markdown and signals, expands contractions, converts emoji to text.
-    Does NOT lowercase, tokenize, remove stopwords, or lemmatize. Sentence
-    structure is preserved so the text reads naturally.
+    Does NOT lowercase. Sentence structure is preserved so the text reads naturally.
 
     LLMs (Qwen, DistilBERT, sentence-transformers) are pretrained on natural
-    prose. Lemmatized token strings ("not think gpt-5 worth money") break the
-    statistical patterns these models rely on and degrade output quality.
-    Always use this function — never preprocess() — for LLM-bound text.
+    prose and need readable input rather than aggressively normalised token strings.
 
     Called by:
         A1 (LLM fine-tuning) — training examples and inference inputs.
@@ -373,7 +251,7 @@ def clean_for_llm(texts: list[str]) -> list[str]:
         A2 (RAG)             — BOTH corpus indexing AND query preprocessing.
                                These must be symmetric or retrieval degrades.
         A3 (CoT/ReAct)       — posts passed to reasoning prompts.
-        A5 (Crisis det.)     — LLM classifier path only.
+        A5 (Crisis det.)     — LLM classifier path.
 
     Example:
         >>> clean_for_llm(["**Holy shit** GPT-5 is NOT worth $200/mo 🔥"])
@@ -386,64 +264,10 @@ def clean_for_llm(texts: list[str]) -> list[str]:
             continue
         cleaned = clean_reddit_markdown(t)
         cleaned = strip_signals(cleaned)
-        # Expand contractions but DO NOT lowercase — LLMs use case as a signal.
         cleaned = contractions.fix(cleaned)
         cleaned = emoji_lib.demojize(cleaned, delimiters=(" ", " "))
         cleaned = _RE_MULTI_WHITESPACE.sub(" ", cleaned).strip()
         out.append(cleaned)
-    return out
-
-
-def preprocess(
-    texts: list[str],
-    tokenizer: str = "regex",           # change to selected tokenizer based on B1 §3.4 comparison
-    emoji_strategy: str = "to_text",
-) -> list[str]:
-    """Full preprocessing pipeline: clean → normalize → tokenize → lemmatize.
-
-    This is the planning.md §7 contract function. Returns lemmatized,
-    lowercased, stopword-removed token strings (space-joined) suitable for
-    BoW, TF-IDF, and LDA inputs.
-
-    DO NOT use this for LLM, NER, or RAG inputs — use clean_for_llm() or
-    clean_for_ner() instead. Lemmatized text actively hurts LLM performance
-    and drops NER entity recall.
-
-    Args:
-        texts:           list of raw Reddit post bodies.
-        tokenizer:       "spacy" (default, preserves hyphenated terms),
-                         "nltk", or "regex". See B1 §5 comparison.
-        emoji_strategy:  "to_text" (default), "strip", or "keep".
-
-    Called by:
-        B4 (Sentiment ML)     — BoW and TF-IDF feature extraction.
-        B5 (Topic clustering) — LDA and BERTopic token inputs.
-        A5 (Crisis det.)      — rule-based keyword threshold path only.
-
-    Example:
-        >>> preprocess(["**GPT-5** is NOT worth $200/mo 🔥 https://openai.com"])
-        ['gpt-5 not worth 200 mo fire']
-    """
-    if tokenizer == "spacy":
-        tok_fn = tokenize_spacy
-    elif tokenizer == "nltk":
-        tok_fn = tokenize_nltk
-    elif tokenizer == "regex":
-        tok_fn = tokenize_regex
-    else:
-        raise ValueError(f"Unknown tokenizer: {tokenizer!r}. Use 'spacy', 'nltk', or 'regex'.")
-
-    out: list[str] = []
-    for t in texts:
-        if not t:
-            out.append("")
-            continue
-        cleaned = clean_reddit_markdown(t)
-        cleaned = strip_signals(cleaned)
-        cleaned = normalize(cleaned, emoji_strategy=emoji_strategy)
-        tokens = tok_fn(cleaned)
-        tokens = remove_stopwords_and_lemmatize(tokens)
-        out.append(" ".join(tokens))
     return out
 
 
@@ -454,11 +278,11 @@ def filter_empty(texts: list[str], min_tokens: int = 3) -> list[str]:
 
     Reddit posts include image-only submissions and deleted content
     (``[removed]``) that produce empty or one-token strings after cleaning.
-    Passing these to LDA / NER / sentiment models wastes compute and can
-    trigger edge-case errors in some libraries.
+    Passing these to downstream models wastes compute and can trigger edge-case
+    errors in some libraries.
 
     Called by:
-        Any notebook after calling preprocess() / clean_for_*() on a corpus.
+        Any notebook after calling clean_for_*() on a corpus.
         Pipeline orchestrator after the Preprocessing Agent runs.
     """
     return [t for t in texts if t and len(t.split()) >= min_tokens]
@@ -483,9 +307,9 @@ def _demo() -> None:
     print(f"clean_for_ner   →  {clean_for_ner([sample])[0]}")
     print("  used by:  B2 (NER), B3 (rule-based)\n")
     print(f"clean_for_llm   →  {clean_for_llm([sample])[0]}")
-    print("  used by:  A1, A2 (RAG), A3, A5 LLM path\n")
-    print(f"preprocess      →  {preprocess([sample])[0]}")
-    print("  used by:  B4 (sentiment), B5 (topic), A5 rule path\n")
+    print("  used by:  A1, A2 (RAG), A3, A5\n")
+    print(f"normalize       →  {_normalize_text(sample)}")
+    print("  used by:  notebooks needing lowercased, expanded text\n")
     print(f"extract_signals →  {extract_signals(sample)}")
     print("  used by:  B3 (rule-based extraction)\n")
 
@@ -497,36 +321,16 @@ def _build_clean_snapshot(brand: str, include_comments: bool = True) -> None:
     verified instantly with ``wc -l`` (Linux/Mac) or
     ``Get-Content ... | Measure-Object -Line`` (PowerShell) without parsing JSON.
 
-    Why include top comments?
-    -------------------------
-    The scraper already fetches the top 5 upvoted comments per post because
-    they carry brand sentiment the post body alone may not express. A post
-    saying "But yeah. Deepseek is censored." with 53k upvotes has no usable
-    sentiment text — but its top comment with 2,751 upvotes ("I got Qwen3.5
-    locally to agree with me...") does. B4 (sentiment), B5 (topic), A5
-    (crisis detection), and A2 (RAG) all benefit from this richer signal.
-
-    Comment bodies are concatenated AFTER the post title+selftext, separated
-    by " | " so the boundary is recoverable if a notebook needs to split them.
-    Only comments that pass a minimum word threshold (≥5 words) are included
-    to filter out low-signal replies like "This." or "Exactly."
-
     Fields written per record:
         All original scraper fields (post_id, title, selftext, subreddit,
         score, num_comments, created_utc, url, image_url, top_comments) plus:
         • text_raw           — title + selftext only (no comments)
         • text_with_comments — title + selftext + top comment bodies joined
-                               with " | ". This is the primary text field for
-                               B4, B5, A2, A5.
+                               with " | ".
         • text_for_ner       — clean_for_ner(text_with_comments)
-                               capitalisation preserved for spaCy NER (B2, B3)
         • text_for_llm       — clean_for_llm(text_with_comments)
-                               readable prose for LLM inputs (A1, A2, A3, A5)
-        • text_preprocessed  — preprocess(text_with_comments)
-                               lemmatized tokens for BoW/TF-IDF/LDA (B4, B5)
+        • text_normalized    — normalize after markdown cleaning + signal removal
         • signals            — extract_signals(text_raw)
-                               URLs/hashtags/mentions from post only (not
-                               comments, since comment signals are noisier)
         • n_comments_included — how many comment bodies were appended
 
     Args:
@@ -536,20 +340,15 @@ def _build_clean_snapshot(brand: str, include_comments: bool = True) -> None:
                           for ablation studies comparing post-only vs
                           post+comment preprocessing in the B1 notebook.
     """
-    # Ensure project root is on sys.path for lazy imports.
-    # Required when called via subprocess from a notebook.
     import sys
     from pathlib import Path
     _project_root = str(Path(__file__).resolve().parent.parent)
     if _project_root not in sys.path:
         sys.path.insert(0, _project_root)
-        
+
     from shared.config import get_data_dir
     from shared.data_loader import load_all_reddit
 
-    # Minimum word count for a comment body to be included.
-    # Filters out low-signal replies ("This.", "Exactly.", "Lol") that add noise
-    # without adding meaning. Matches MIN_COMMENT_WORDS in reddit_scraper.py.
     MIN_COMMENT_WORDS = 5
 
     posts = load_all_reddit(brand=brand, as_df=False)
@@ -561,21 +360,16 @@ def _build_clean_snapshot(brand: str, include_comments: bool = True) -> None:
 
     with open(out_path, "w", encoding="utf-8") as fh:
         for p in posts:
-            # text = title + selftext, already joined by the scraper.
             text_raw = p.get("text", "").strip()
 
-            # Skip posts where even the title is empty (image-only posts
-            # with no caption, deleted posts, etc.).
             if not text_raw:
                 n_skipped += 1
                 continue
 
-            # Build the enriched text by appending top comment bodies.
             if include_comments:
                 comment_bodies = []
                 for c in p.get("top_comments", []):
                     body = c.get("body", "").strip()
-                    # Skip deleted/removed comments and very short replies.
                     if not body or body in ("[deleted]", "[removed]"):
                         continue
                     if len(body.split()) < MIN_COMMENT_WORDS:
@@ -593,28 +387,20 @@ def _build_clean_snapshot(brand: str, include_comments: bool = True) -> None:
                 n_comments_included = 0
 
             total_comments_included += n_comments_included
-
-            # Signals are extracted from the post body only (not comments).
-            # Comment mentions/hashtags are noisier and less structured, so
-            # they are excluded to keep the B3 signal analysis clean.
             signals = extract_signals(text_raw)
 
-            # Preserve all original scraper fields, then add the derived ones.
-            # We drop "text" (the original title+selftext field) from the
-            # output to avoid confusion — text_raw carries the same content.
             record = {k: v for k, v in p.items() if k != "text"}
             record["text_raw"]            = text_raw
             record["text_with_comments"]  = text_with_comments
             record["n_comments_included"] = n_comments_included
             record["text_for_ner"]        = clean_for_ner([text_with_comments])[0]
             record["text_for_llm"]        = clean_for_llm([text_with_comments])[0]
-            record["text_preprocessed"]   = preprocess([text_with_comments])[0]
+            record["text_normalized"]     = _normalize_text(text_with_comments)
             record["signals"]             = signals
 
             fh.write(json.dumps(record, ensure_ascii=False, default=_json_default) + "\n")
             n_written += 1
 
-    # Summary so it's obvious what was built and how much comment enrichment happened.
     print(f"✓ wrote {n_written} cleaned posts → {out_path}")
     if n_skipped:
         print(f"  {n_skipped} posts skipped (empty text_raw)")
