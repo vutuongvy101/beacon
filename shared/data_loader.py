@@ -4,8 +4,8 @@ Public API
 ----------
 load_reddit(brand, date, as_df)   Load a single day's Reddit snapshot.
 load_all_reddit(brand, as_df)     Merge all Reddit snapshots, deduplicating by post_id.
-load_sample(brand, as_df)         Alias for load_all_reddit — matches interface expected
-                                  by downstream notebooks.
+load_sample(brand, as_df)         Alias for load_all_reddit — matches interface expected by downstream notebooks.
+load_clean_corpus(brand, as_df)   B1 output: reddit_<brand>_clean.jsonl (text_preprocessed, …).
 """
 
 from __future__ import annotations
@@ -133,3 +133,25 @@ def load_sample(
     It is equivalent to ``load_all_reddit(brand, as_df)``.
     """
     return load_all_reddit(brand=brand, as_df=as_df)
+
+
+def load_clean_corpus(
+    brand: str = "openai",
+    as_df: bool = True,
+) -> Any:
+    """Load B1 preprocessed corpus from ``reddit_<brand>_clean.jsonl``.
+
+    Each record includes ``text_preprocessed``, ``text_for_ner``,
+    ``text_for_llm``, ``text_with_comments``, and ``signals``.
+
+    Run ``python shared/preprocessing.py --build`` if the file is missing.
+    """
+    path = _snapshot_dir() / f"reddit_{brand}_clean.jsonl"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Clean corpus not found: {path}\n"
+            "Generate it with:  python shared/preprocessing.py --build"
+        )
+    records = list(_iter_jsonl(path))
+    print(f"Loaded {len(records)} preprocessed posts from {path.name}")
+    return _to_df(records) if as_df else records
