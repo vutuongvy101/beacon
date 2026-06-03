@@ -1,0 +1,28 @@
+{
+  "level": "red",
+  "reason": "High negative sentiment (53%) across the corpus.",
+  "negative_ratio": 0.533,
+  "flagged_post_ids": [
+    "1i75wo0",
+    "1imhi9l",
+    "1mc8b4c",
+    "1mmm614",
+    "1kbkn1c",
+    "1t62m4b",
+    "1ne90w5",
+    "1se9cm0",
+    "1mv74u1",
+    "1n5wdke",
+    "1k95rh9",
+    "1h7w6ox",
+    "1jopeki",
+    "1ke6t8t",
+    "1p0d2e1",
+    "1mjva66",
+    "1t0go85",
+    "1o7w3mj",
+    "1n0rm65",
+    "1rmgaaq"
+  ],
+  "react_trace": []
+}

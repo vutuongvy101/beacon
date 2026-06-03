@@ -1,0 +1,23 @@
+[
+  {
+    "strategy": "zero_shot",
+    "summary_text": "Reddit discussion of OpenAI spans product launches, API limits, and corporate news. Negative threads cluster around pricing and policy; positive threads focus on new model capabilities.",
+    "recommendation": "Monitor pricing-related topics weekly and prepare proactive messaging on subscription changes.",
+    "rouge_l": 0.34,
+    "judge_score": 3.2
+  },
+  {
+    "strategy": "few_shot",
+    "summary_text": "Community sentiment is mixed: enthusiasm for Codex and GPT updates coexists with criticism of rate limits and leadership decisions.",
+    "recommendation": "Highlight developer-facing improvements in official channels while addressing limit frustration with clear documentation.",
+    "rouge_l": 0.41,
+    "judge_score": 3.8
+  },
+  {
+    "strategy": "chain_of_thought",
+    "summary_text": "Step 1: Negative share is concentrated in policy and pricing topics. Step 2: Product release posts drive positive spikes. Step 3: Entity mentions of leadership correlate with polarized threads.",
+    "recommendation": "Prioritize crisis monitoring on pricing topics; amplify positive product narratives with evidence-backed posts.",
+    "rouge_l": 0.46,
+    "judge_score": 4.3
+  }
+]

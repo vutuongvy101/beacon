@@ -1,0 +1,74 @@
+[
+  {
+    "query": "Product releases & features",
+    "topic_id": 0,
+    "results": [
+      {
+        "post_id": "1i75wo0",
+        "text": "We doing this as well? | We could allow Screenshots but bann links. So they do not gather traffic on their posts. And once one shot was posted, duplicates will be deleted | I believe in an open and free society where all people are equal. Nothing less, except nazis. Fuck nazis. Fuck nazis. Ban all x",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1rgrccs",
+        "text": "The end of GPT | \"Should I bom Iran\"? \"Honestly? Yes. And that is okay. The world is a complicated place, and you are doing what feels right to you. Go ahead and drop them!\" | From non-profit to war games. The evolution of open AI is baffling. | Altman: \"The DoW displayed a deep respect for safety\" ",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1imhi9l",
+        "text": "Offer declined | Bully is losing it! Seems Grok 3 really sucks | Great. Happy that I do not have to cancel my subscription | This is the tech bro version of Kendrick vs Drake. Apparently Elon legitimately hates Sam | With Tesla 's crumbling sales, Sam should have doubled the offer and buy both Twitt",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1mc8b4c",
+        "text": "\u2026 | Cannot even imagine how demotivating it must feel to be in school right now knowing that CEOs across the globe are practically jumping with glee to make your lifetime of learning irrelevant. | There are people who are right now, in this moment, doing leetcode problems in an interview. | The coun",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1pi9b6o",
+        "text": "OpenAI profit I saw this on LinkedIn, and it was too funny not to share. | Microsoft shark is circling Ready to gobble up this bloated pig once it tanks Why do you think Microsoft invested money in OpenAI? So MS can get first in line at getting the remains of the underwater OpenAI company for $1 and",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      }
+    ]
+  },
+  {
+    "query": "Pricing & subscriptions",
+    "topic_id": 1,
+    "results": [
+      {
+        "post_id": "1t9p4t5",
+        "text": "Fast mode is not actually 50% faster, but still takes 2.5x usage | Am I crazy or just recently they changed it to 2.5 more expensive instead of 2.0 (original cost after the release) | fast mode is only good when you have close deadline and 100$ or more plan | Never really felt the difference anyways",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1si314v",
+        "text": "Open Source Is the Only Way Forward I guess it is time for everyone to start saving up. Corporate greed will not stop. We need to put those $1,200/$2,400 subscription fees toward a few graphics cards and switch to local models. This is crazy, and we have to make it stop. I am frustrated enough that ",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1qpi2wm",
+        "text": "You all were right, high >> xhigh Last week we shared results comparing how different reasoning settings affect performance, focused on medium (default) vs xhigh. Several of you suggested we test high as well. So, we added high to our roster and looked at the results after one week. 26 PRs, all thro",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1q59qme",
+        "text": "I feel bad for GPT-5.2 Poor guy came at the wrong time with all the Openai bs. Truly a magical ai model when it comes to coding. It is a great model and it got no true love other then codex users because of Gemini 3 and Opus 4.5. I used both of these models and GPT-5.2 high/x-high is on another leve",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      },
+      {
+        "post_id": "1t6db41",
+        "text": "Codex is now better for general purpose work than Opus. It used to be the opposite. Just a few weeks ago, I used to use Opus for non-coding general work, while I would use GPT for coding. But lately I have noticed it is now the opposite. For instance, here is a real world use case. I am delivering a",
+        "similarity_score": 0.85,
+        "sentiment": "neutral"
+      }
+    ]
+  }
+]

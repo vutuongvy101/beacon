@@ -1,0 +1,414 @@
+[
+  {
+    "topic_id": 0,
+    "label": "Product releases & features",
+    "weekly": [
+      {
+        "week": "2025-W04",
+        "count": 1
+      },
+      {
+        "week": "2026-W09",
+        "count": 1
+      },
+      {
+        "week": "2025-W07",
+        "count": 1
+      },
+      {
+        "week": "2025-W31",
+        "count": 1
+      },
+      {
+        "week": "2025-W50",
+        "count": 1
+      },
+      {
+        "week": "2025-W32",
+        "count": 1
+      },
+      {
+        "week": "2025-W18",
+        "count": 1
+      },
+      {
+        "week": "2025-W37",
+        "count": 1
+      },
+      {
+        "week": "2025-W33",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2025-W37",
+        "count": 1
+      },
+      {
+        "week": "2026-W15",
+        "count": 1
+      },
+      {
+        "week": "2025-W34",
+        "count": 1
+      },
+      {
+        "week": "2025-W40",
+        "count": 1
+      },
+      {
+        "week": "2025-W07",
+        "count": 1
+      },
+      {
+        "week": "2025-W36",
+        "count": 1
+      },
+      {
+        "week": "2025-W17",
+        "count": 1
+      },
+      {
+        "week": "2024-W49",
+        "count": 1
+      },
+      {
+        "week": "2025-W14",
+        "count": 1
+      },
+      {
+        "week": "2025-W18",
+        "count": 1
+      },
+      {
+        "week": "2025-W47",
+        "count": 1
+      },
+      {
+        "week": "2025-W32",
+        "count": 1
+      },
+      {
+        "week": "2026-W18",
+        "count": 1
+      },
+      {
+        "week": "2025-W35",
+        "count": 1
+      },
+      {
+        "week": "2025-W42",
+        "count": 1
+      },
+      {
+        "week": "2025-W38",
+        "count": 1
+      },
+      {
+        "week": "2025-W35",
+        "count": 1
+      },
+      {
+        "week": "2025-W24",
+        "count": 1
+      },
+      {
+        "week": "2025-W38",
+        "count": 1
+      },
+      {
+        "week": "2026-W08",
+        "count": 1
+      },
+      {
+        "week": "2026-W10",
+        "count": 1
+      },
+      {
+        "week": "2025-W32",
+        "count": 1
+      },
+      {
+        "week": "2025-W46",
+        "count": 1
+      },
+      {
+        "week": "2026-W07",
+        "count": 1
+      },
+      {
+        "week": "2026-W10",
+        "count": 1
+      },
+      {
+        "week": "2025-W35",
+        "count": 1
+      },
+      {
+        "week": "2025-W44",
+        "count": 1
+      },
+      {
+        "week": "2025-W16",
+        "count": 1
+      },
+      {
+        "week": "2025-W43",
+        "count": 1
+      },
+      {
+        "week": "2025-W06",
+        "count": 1
+      },
+      {
+        "week": "2025-W51",
+        "count": 1
+      },
+      {
+        "week": "2025-W17",
+        "count": 1
+      },
+      {
+        "week": "2025-W33",
+        "count": 1
+      },
+      {
+        "week": "2025-W32",
+        "count": 1
+      },
+      {
+        "week": "2025-W32",
+        "count": 1
+      },
+      {
+        "week": "2025-W37",
+        "count": 1
+      },
+      {
+        "week": "2025-W42",
+        "count": 1
+      },
+      {
+        "week": "2025-W27",
+        "count": 1
+      },
+      {
+        "week": "2025-W12",
+        "count": 1
+      },
+      {
+        "week": "2025-W01",
+        "count": 1
+      }
+    ]
+  },
+  {
+    "topic_id": 1,
+    "label": "Pricing & subscriptions",
+    "weekly": [
+      {
+        "week": "2026-W20",
+        "count": 1
+      },
+      {
+        "week": "2026-W15",
+        "count": 1
+      },
+      {
+        "week": "2026-W05",
+        "count": 1
+      },
+      {
+        "week": "2026-W02",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W20",
+        "count": 1
+      },
+      {
+        "week": "2025-W38",
+        "count": 1
+      },
+      {
+        "week": "2026-W09",
+        "count": 1
+      },
+      {
+        "week": "2026-W06",
+        "count": 1
+      },
+      {
+        "week": "2026-W18",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W15",
+        "count": 1
+      },
+      {
+        "week": "2026-W13",
+        "count": 1
+      },
+      {
+        "week": "2026-W17",
+        "count": 1
+      },
+      {
+        "week": "2026-W06",
+        "count": 1
+      },
+      {
+        "week": "2026-W07",
+        "count": 1
+      },
+      {
+        "week": "2025-W52",
+        "count": 1
+      },
+      {
+        "week": "2025-W51",
+        "count": 1
+      },
+      {
+        "week": "2026-W16",
+        "count": 1
+      },
+      {
+        "week": "2026-W17",
+        "count": 1
+      },
+      {
+        "week": "2026-W16",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W02",
+        "count": 1
+      },
+      {
+        "week": "2026-W07",
+        "count": 1
+      },
+      {
+        "week": "2026-W14",
+        "count": 1
+      },
+      {
+        "week": "2025-W38",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W15",
+        "count": 1
+      },
+      {
+        "week": "2026-W16",
+        "count": 1
+      },
+      {
+        "week": "2026-W15",
+        "count": 1
+      },
+      {
+        "week": "2026-W18",
+        "count": 1
+      },
+      {
+        "week": "2026-W17",
+        "count": 1
+      },
+      {
+        "week": "2026-W10",
+        "count": 1
+      },
+      {
+        "week": "2026-W11",
+        "count": 1
+      },
+      {
+        "week": "2026-W10",
+        "count": 1
+      },
+      {
+        "week": "2026-W17",
+        "count": 1
+      },
+      {
+        "week": "2026-W16",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W06",
+        "count": 1
+      },
+      {
+        "week": "2026-W05",
+        "count": 1
+      },
+      {
+        "week": "2026-W18",
+        "count": 1
+      },
+      {
+        "week": "2026-W18",
+        "count": 1
+      },
+      {
+        "week": "2026-W10",
+        "count": 1
+      },
+      {
+        "week": "2026-W08",
+        "count": 1
+      },
+      {
+        "week": "2026-W20",
+        "count": 1
+      },
+      {
+        "week": "2026-W11",
+        "count": 1
+      },
+      {
+        "week": "2026-W14",
+        "count": 1
+      },
+      {
+        "week": "2026-W19",
+        "count": 1
+      },
+      {
+        "week": "2026-W13",
+        "count": 1
+      }
+    ]
+  }
+]

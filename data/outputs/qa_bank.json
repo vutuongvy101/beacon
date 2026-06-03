@@ -1,0 +1,66 @@
+[
+  {
+    "id": "q1",
+    "text": "What is the dominant sentiment about GPT-4 pricing?",
+    "category": "sentiment",
+    "answer": "Sentiment toward GPT-4 and subscription pricing skews negative in filtered Reddit threads, with frequent complaints about cost versus value.",
+    "supporting_posts": [],
+    "suggested_search": "GPT-4 pricing"
+  },
+  {
+    "id": "q2",
+    "text": "Are there any emerging crisis signals?",
+    "category": "crisis",
+    "answer": "Crisis indicators track elevated negative ratios on policy and pricing topics; monitor flagged posts in the crisis panel.",
+    "supporting_posts": [],
+    "suggested_search": ""
+  },
+  {
+    "id": "q3",
+    "text": "Which OpenAI products get the most positive reactions?",
+    "category": "products",
+    "answer": "Codex, new model releases, and developer tooling posts tend to receive more positive engagement than pricing threads.",
+    "supporting_posts": [],
+    "suggested_search": "Codex"
+  },
+  {
+    "id": "q4",
+    "text": "What are developers' top concerns?",
+    "category": "community",
+    "answer": "Developers frequently discuss API rate limits, token costs, and reliability of coding agents.",
+    "supporting_posts": [],
+    "suggested_search": "developer api"
+  },
+  {
+    "id": "q5",
+    "text": "How is sentiment about Sam Altman trending?",
+    "category": "people",
+    "answer": "Mentions of Sam Altman appear in leadership and policy threads with mixed sentiment depending on news cycle.",
+    "supporting_posts": [],
+    "suggested_search": "Sam Altman"
+  },
+  {
+    "id": "q6",
+    "text": "What topics are growing this month?",
+    "category": "topics",
+    "answer": "Topic clusters show shifting volume week-over-week; use the topic trend chart after applying a date filter.",
+    "supporting_posts": [],
+    "suggested_search": ""
+  },
+  {
+    "id": "q7",
+    "text": "Which entities are mentioned most?",
+    "category": "entities",
+    "answer": "OpenAI, ChatGPT, and GPT-family product names dominate entity mentions alongside key executives.",
+    "supporting_posts": [],
+    "suggested_search": "OpenAI"
+  },
+  {
+    "id": "q8",
+    "text": "Is negative sentiment increasing?",
+    "category": "sentiment",
+    "answer": "Compare weekly negative counts in the sentiment trend chart to see if negativity is rising.",
+    "supporting_posts": [],
+    "suggested_search": ""
+  }
+]
