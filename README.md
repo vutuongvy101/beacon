@@ -25,10 +25,13 @@ Advanced extensions (Week 3): multilingual analysis, dual-brand comparison, mult
 ## Repository layout
 
 ```
+backend/            # FastAPI dashboard API (load JSONs, filter, search)
+frontend/           # HTML/CSS/JS dashboard (Chart.js)
+scripts/            # export_dashboard_inputs.py, setup_dashboard.sh, reddit_scraper.py
 shared/             # config, data loader, exported function contracts
 basic/              # B1–B5 notebooks (preprocessing, NER, rules, sentiment, topics)
 advanced/           # A1–A7 notebooks (LLM, RAG, CoT/ReAct, crisis, agentic, multimodal, …)
-pipeline/           # LangGraph orchestrator, FastAPI backend, Streamlit/Gradio frontend
+pipeline/           # LangGraph orchestrator (planned)
 evaluation/         # shared metrics helpers
 data/               # sample data (<5MB), snapshots, FAISS index
 models/             # saved checkpoints (e.g. LoRA)
@@ -91,6 +94,39 @@ python scripts/reddit_scraper.py
 ```
 
 The demo and all notebooks run from the committed snapshot — no live scraping at runtime.
+
+---
+
+## Dashboard (reactive PoC)
+
+The brand monitor UI is **FastAPI + vanilla JS** (see [`DASHBOARD_SPEC.md`](./DASHBOARD_SPEC.md)). Use **Python 3.10–3.12** (3.13 may fail to build some pinned wheels).
+
+```bash
+# One-time setup (venv + deps + export JSONs + FAISS)
+chmod +x scripts/setup_dashboard.sh run_server.sh
+./scripts/setup_dashboard.sh --fast    # add --fast for stub topics (faster)
+
+# Or step by step:
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dashboard.txt
+python scripts/export_dashboard_inputs.py --fast
+
+# Run (API + static frontend on one port)
+./run_server.sh
+# → http://localhost:8000
+
+# Optional: separate static server on :5500 (CORS already allowed)
+cd frontend && python -m http.server 5500
+```
+
+**Refresh data** after notebooks produce new outputs:
+
+```bash
+source .venv/bin/activate
+python scripts/export_dashboard_inputs.py        # full BERTopic topics
+# restart ./run_server.sh
+```
 
 ---
 
