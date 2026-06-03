@@ -1,0 +1,9 @@
+sequenceDiagram
+  actor User
+  participant drawer as drawer.js
+  participant API as POST /api/posts
+
+  User->>drawer: openDrawer("post", postId)
+  drawer->>API: {filterState, post_id, limit:1}
+  API-->>drawer: posts[0] + entities from entity_by_post
+  drawer->>User: Title, text, sentiment, Reddit link

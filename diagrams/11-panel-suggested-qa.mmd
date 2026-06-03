@@ -1,0 +1,10 @@
+sequenceDiagram
+  actor User
+  participant app as app.js
+  participant API as GET /api/suggested-qa
+  participant DATA as DATA.qa_bank
+
+  app->>API: GET /api/suggested-qa
+  API->>DATA: Map id, text, category
+  API-->>app: {questions}
+  app->>User: #qa-grid chips

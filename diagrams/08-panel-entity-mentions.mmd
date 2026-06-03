@@ -1,0 +1,12 @@
+sequenceDiagram
+  actor User
+  participant ent as entities.js
+  participant API as POST /api/entities
+  participant DATA as DATA.entities rows
+
+  API->>DATA: Aggregate mentions per entity text
+  API-->>ent: entities (top 30)
+  ent->>User: #entity-list clickable rows
+
+  User->>ent: Click entity row
+  ent->>User: openDrawer("entity", text)

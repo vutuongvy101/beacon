@@ -1,0 +1,10 @@
+sequenceDiagram
+  participant summary as summary.js
+  participant API as GET /api/summary
+  participant DATA as DATA.summaries
+
+  Note over summary: Once on DOMContentLoaded (not on filter refresh)
+  summary->>API: GET /api/summary
+  API->>DATA: max by judge_score
+  API-->>summary: strategy, summary_text, recommendation
+  summary->>summary: #summary-content HTML

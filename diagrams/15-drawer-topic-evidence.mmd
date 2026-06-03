@@ -1,0 +1,21 @@
+sequenceDiagram
+  actor User
+  participant drawer as drawer.js
+  participant Topics as POST /api/topics
+  participant Evidence as POST /api/evidence
+  participant Posts as POST /api/posts
+  participant RAG as DATA.rag_evidence
+
+  User->>drawer: openDrawer("topic", topic_id)
+  drawer->>Topics: filterState
+  Topics-->>drawer: topic metadata (label, keywords)
+  drawer->>Evidence: {filterState, topic_id}
+  alt rag entry for topic_id
+    Evidence->>RAG: Precomputed results ∩ filtered ids
+  else fallback
+    Evidence->>Evidence: topic post_ids or search
+  end
+  Evidence-->>drawer: {query, evidence[]}
+  drawer->>User: Evidence cards (evidence.js)
+  drawer->>Posts: {filterState, limit:15}
+  Posts-->>drawer: Related posts section

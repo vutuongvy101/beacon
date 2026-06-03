@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor User
+  participant topics as topics.js
+  participant API as POST /api/topics
+  participant DATA as DATA.topics + filtered ids
+  participant Chart as Chart.js
+
+  API->>DATA: Intersect topic post_ids with filtered set
+  API-->>topics: topics [{topic_id, label, post_count, ...}]
+  topics->>Chart: horizontal bar (post_count)
+  Chart-->>User: Topic labels (truncated)
+
+  User->>Chart: Click bar
+  Chart->>topics: onClick → topic_id
+  topics->>User: openDrawer("topic", topic_id)

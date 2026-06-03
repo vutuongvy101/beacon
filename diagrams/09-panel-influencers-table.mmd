@@ -1,0 +1,11 @@
+sequenceDiagram
+  actor User
+  participant inf as influencers.js
+  participant API as POST /api/influencers
+
+  API->>API: engagement = mentions × log(1+upvotes)
+  API-->>inf: influencers (ranked top 30)
+  inf->>User: #influencer-table
+
+  User->>inf: Click row
+  inf->>User: openDrawer("entity", entity)

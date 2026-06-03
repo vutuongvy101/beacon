@@ -1,0 +1,32 @@
+sequenceDiagram
+  actor User
+  participant Browser
+  participant Static as FastAPI StaticFiles
+  participant API as FastAPI /api
+  participant Loader as data_loader (startup)
+  participant Panels as frontend panels
+
+  Note over Loader: Already ran in lifespan before first request
+  User->>Browser: Open http://localhost:8000
+  Browser->>Static: GET / (index.html, assets)
+  Static-->>Browser: HTML, CSS, JS, Chart.js
+
+  Browser->>API: GET /api/suggested-qa
+  API-->>Browser: questions from qa_bank.json
+  Panels->>Browser: Render QA chips
+
+  Browser->>API: GET /api/summary
+  API-->>Browser: best summary by judge_score
+  Panels->>Browser: Render executive summary
+
+  Browser->>API: POST /api/overview (filterState)
+  Browser->>API: POST /api/topics (filterState)
+  Browser->>API: POST /api/entities (filterState)
+  Browser->>API: POST /api/influencers (filterState)
+  par Parallel dashboard load
+    API-->>Browser: KPIs, crisis, donut, trend
+    API-->>Browser: topics (+ unused trend payload)
+    API-->>Browser: entity list
+    API-->>Browser: influencer table
+  end
+  Panels->>Browser: Chart.js + DOM updates

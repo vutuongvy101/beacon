@@ -1,0 +1,28 @@
+sequenceDiagram
+  actor User
+  participant app as app.js
+  participant API as FastAPI /api
+  participant Filters as filters.apply_filters
+  participant Search as search.search_posts
+
+  User->>app: Change date preset, search, or Clear
+  app->>app: Update filterState, syncStateToURL()
+  app->>app: debounce(300ms) refreshDashboard()
+
+  app->>API: POST /api/overview {date_from, date_to, search}
+  app->>API: POST /api/topics (same body)
+  app->>API: POST /api/entities (same body)
+  app->>API: POST /api/influencers (same body)
+
+  loop Each endpoint
+    API->>Filters: apply_filters(FilterState)
+    alt search non-empty
+      Filters->>Search: semantic / entity / # / u/
+      Search-->>Filters: post_ids + search_meta
+    end
+    Filters-->>API: filtered posts DataFrame
+  end
+
+  API-->>app: Four JSON responses
+  app->>app: renderOverview, renderTopics,<br/>renderEntities, renderInfluencers
+  app->>app: updateSearchBadge(search_meta)

@@ -1,0 +1,14 @@
+sequenceDiagram
+  actor User
+  participant ov as overview.js
+  participant API as POST /api/overview
+  participant Chart as Chart.js
+
+  API-->>ov: sentiment_donut [{label, count, color}]
+  ov->>Chart: destroy prior donutChart
+  ov->>Chart: new Chart(canvas, type: doughnut)
+  Chart-->>User: Positive / Negative / Neutral slices
+
+  User->>Chart: Click slice
+  Chart->>ov: onClick → label
+  ov->>User: openDrawer("sentiment", label)

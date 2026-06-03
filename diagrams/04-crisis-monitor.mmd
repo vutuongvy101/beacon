@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant ov as overview.js
+  participant API as POST /api/overview
+  participant DATA as DATA.crisis + filtered df
+
+  Note over ov: Same /api/overview response as KPIs
+  API->>DATA: crisis.json level, reason
+  API->>DATA: negative_ratio from filtered posts
+  API-->>ov: crisis {level, reason, negative_ratio}
+  ov->>ov: #crisis-badge class + text
+  ov->>ov: #crisis-content HTML

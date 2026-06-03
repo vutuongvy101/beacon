@@ -1,0 +1,56 @@
+flowchart TB
+  subgraph startup["Startup (run_server.sh)"]
+    SH["run_server.sh"]
+    SH --> UV["uvicorn backend.main:app<br/>:8000 --reload"]
+    UV --> LIFE["lifespan: data_loader.load_all()"]
+  end
+
+  subgraph dataFiles["data/ (loaded once)"]
+    OUT["data/outputs/*.json<br/>posts, sentiment, entities,<br/>topics, trend, rag, summaries,<br/>crisis, qa_bank"]
+    FAISS["data/faiss_index/<br/>posts.index + id_map.json"]
+    LIFE --> OUT
+    LIFE --> FAISS
+    LIFE --> MEM["In-memory DATA dict<br/>(posts DataFrame, indexes)"]
+  end
+
+  subgraph backend["Backend (FastAPI)"]
+    MAIN["main.py"]
+    MAIN --> CORS["CORSMiddleware"]
+    MAIN --> API["/api routers"]
+    MAIN --> STATIC["StaticFiles → frontend/"]
+    API --> OV["overview"]
+    API --> TOP["topics"]
+    API --> ENT["entities"]
+    API --> INF["influencers"]
+    API --> PST["posts"]
+    API --> EVD["evidence"]
+    API --> QA["qa + summary"]
+    FILT["filters.apply_filters()"]
+    SRCH["search.search_posts()<br/>FAISS / entity / hashtag / author"]
+    OV & TOP & ENT & INF & PST & EVD --> FILT
+    FILT --> SRCH
+    FILT --> MEM
+    EVD --> SRCH
+  end
+
+  subgraph frontend["Frontend (static SPA)"]
+    HTML["index.html + Chart.js CDN"]
+    APP["app.js<br/>filterState, refreshDashboard"]
+    APIJS["api.js"]
+    PANELS["panels/*.js<br/>overview, topics, entities,<br/>influencers, evidence, summary"]
+    DRAW["drawer.js"]
+    HTML --> APP
+    APP --> APIJS
+    APP --> PANELS
+    PANELS --> DRAW
+  end
+
+  subgraph browser["Browser"]
+    USER["User"]
+  end
+
+  UV --> MAIN
+  USER -->|GET /| STATIC
+  STATIC --> HTML
+  USER -->|POST/GET /api/*| API
+  APIJS -->|fetch| API

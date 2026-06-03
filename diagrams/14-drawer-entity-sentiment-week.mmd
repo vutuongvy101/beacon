@@ -1,0 +1,19 @@
+sequenceDiagram
+  actor User
+  participant drawer as drawer.js
+  participant API as POST /api/posts
+  participant IDX as DATA.entity_index
+
+  alt entity click
+    User->>drawer: openDrawer("entity", text)
+    drawer->>API: {filterState, entity_text, limit:25}
+    API->>IDX: post_ids for entity
+  else donut click
+    User->>drawer: openDrawer("sentiment", label)
+    drawer->>API: {filterState, sentiment, limit:25}
+  else trend click
+    User->>drawer: openDrawer("week", week)
+    drawer->>API: {filterState, week, limit:25}
+  end
+  API-->>drawer: {total, posts}
+  drawer->>User: Post cards → openDrawer("post", …)

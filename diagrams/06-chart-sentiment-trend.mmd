@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor User
+  participant ov as overview.js
+  participant API as POST /api/overview
+  participant Helpers as week_key()
+  participant Chart as Chart.js
+
+  API->>Helpers: Group df by week × sentiment
+  API-->>ov: sentiment_trend [{week, positive, negative, neutral}]
+  ov->>Chart: stacked bar (3 datasets)
+  Chart-->>User: Weekly stacked bars
+
+  User->>Chart: Click bar segment
+  Chart->>ov: onClick → week
+  ov->>User: openDrawer("week", week)

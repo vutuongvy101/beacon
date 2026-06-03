@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor User
+  participant app as app.js
+  participant API as POST /api/qa
+  participant DATA as DATA.qa_bank
+
+  User->>app: Click qa-chip
+  app->>API: POST /api/qa {question_id}
+  API->>DATA: Lookup by id
+  API-->>app: answer, suggested_search
+  app->>User: Typewriter #qa-answer
+  alt suggested_search set
+    app->>app: filterState.search = suggested_search
+    app->>app: refreshDashboard() → 4 POSTs
+  end

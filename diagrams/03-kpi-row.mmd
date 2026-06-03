@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor User
+  participant app as app.js
+  participant ov as overview.js
+  participant API as POST /api/overview
+  participant Filters as apply_filters
+
+  Note over app: Part of refreshDashboard()
+  app->>API: FilterState JSON
+  API->>Filters: apply_filters
+  Filters-->>API: df, search_meta
+  API->>API: sentiment_breakdown, authors,<br/>entity count, weekly buckets
+  API-->>app: kpis, crisis, sentiment_donut,<br/>sentiment_trend, search_meta
+  app->>ov: renderOverview(data)
+  ov->>User: #kpi-row: posts, %, authors, entities
