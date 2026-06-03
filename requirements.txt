@@ -9,6 +9,7 @@ scikit-learn>=1.4
 scipy>=1.12
 
 # ── NLP — basic (B1–B5) ───────────────────────────────────────────────────────
+contractions>=0.1.72
 nltk>=3.8
 spacy>=3.7
 gensim>=4.3
