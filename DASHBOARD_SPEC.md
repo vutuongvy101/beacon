@@ -1,7 +1,6 @@
 # DASHBOARD SPEC — Reactive Brand Monitor
 
 > **This is the dashboard-only spec.** Backend (FastAPI) + frontend (HTML/CSS/JS).
-> Pipeline notebooks are specified separately in `CURSOR_INSTRUCTIONS.md` — do not duplicate that work here.
 >
 > **Assumptions locked:**
 > - Search: semantic FAISS with entity-match badge
