@@ -12,7 +12,7 @@ from sklearn.feature_extraction import text as _ft
 from sklearn.feature_extraction.text import CountVectorizer
 from umap import UMAP
 
-from shared.preprocess import preprocess
+from shared.preprocessing import clean_for_llm
 
 
 DOMAIN_STOPWORDS = {
@@ -146,7 +146,7 @@ def detect_topics(
     Returns ``[{topic_id, keywords, posts}, ...]``. Per-thread labels use
     ``assign_thread_topics()`` on the same fitted model.
     """
-    cleaned = preprocess(list(texts))
+    cleaned = clean_for_llm(list(texts))
     if len(cleaned) < 5:
         return []
 
