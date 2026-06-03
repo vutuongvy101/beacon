@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAI Brand Monitor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <i class="ti ti-radar-2"></i>
+      <div>
+        <div class="brand-title">OpenAI Brand Monitor</div>
+        <div class="brand-sub">Reddit intelligence · r/ChatGPT · r/OpenAI</div>
+      </div>
+    </div>
+    <div class="crisis-badge" id="crisis-badge"></div>
+  </header>
+
+  <div class="control-bar">
+    <div class="control-group">
+      <label><i class="ti ti-calendar"></i> Date range</label>
+      <select id="date-preset">
+        <option value="all" selected>All time</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+        <option value="custom">Custom...</option>
+      </select>
+      <div id="date-custom" hidden>
+        <input type="date" id="date-from">
+        <input type="date" id="date-to">
+      </div>
+    </div>
+    <div class="control-group search-group">
+      <label><i class="ti ti-search"></i> Search</label>
+      <input type="text" id="search-input" placeholder="Try: GPT-4, pricing, #openai, u/spez...">
+      <span class="search-badge" id="search-badge" hidden></span>
+    </div>
+    <button id="clear-filters" class="btn-ghost" type="button">
+      <i class="ti ti-x"></i> Clear
+    </button>
+  </div>
+
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <div class="dashboard-grid">
+
+    <section class="panel panel-full" id="panel-qa">
+      <header><h2>Ask the data</h2></header>
+      <div class="qa-grid" id="qa-grid"></div>
+      <div class="qa-answer" id="qa-answer" hidden></div>
+    </section>
+
+    <section class="panel" id="panel-sentiment">
+      <header><h2>Sentiment breakdown</h2></header>
+      <div class="chart-wrap"><canvas id="chart-sentiment-donut"></canvas></div>
+      <div class="chart-wrap"><canvas id="chart-sentiment-trend"></canvas></div>
+    </section>
+
+    <section class="panel" id="panel-topics">
+      <header><h2>Topic clusters</h2></header>
+      <div class="chart-wrap"><canvas id="chart-topics-bar"></canvas></div>
+    </section>
+
+    <section class="panel" id="panel-entities">
+      <header><h2>Entity mentions</h2></header>
+      <div id="entity-list"></div>
+    </section>
+
+    <section class="panel" id="panel-influencers">
+      <header><h2>Top voices (entities)</h2></header>
+      <table id="influencer-table"></table>
+    </section>
+
+    <section class="panel" id="panel-crisis">
+      <header><h2>Crisis monitor</h2></header>
+      <div id="crisis-content"></div>
+    </section>
+
+    <section class="panel panel-wide" id="panel-summary">
+      <header><h2>Executive summary</h2></header>
+      <div id="summary-content"></div>
+    </section>
+
+  </div>
+
+  <aside class="drawer" id="drawer" hidden>
+    <header class="drawer-header">
+      <h3 id="drawer-title"></h3>
+      <button id="drawer-close" type="button"><i class="ti ti-x"></i></button>
+    </header>
+    <div class="drawer-content" id="drawer-content"></div>
+  </aside>
+  <div class="drawer-overlay" id="drawer-overlay" hidden></div>
+
+  <div class="loading-overlay" id="loading-overlay" hidden>
+    <div class="spinner"></div>
+  </div>
+
+  <div class="error-banner" id="error-banner" hidden></div>
+
+  <script src="api.js"></script>
+  <script src="drawer.js"></script>
+  <script src="panels/overview.js"></script>
+  <script src="panels/topics.js"></script>
+  <script src="panels/entities.js"></script>
+  <script src="panels/influencers.js"></script>
+  <script src="panels/evidence.js"></script>
+  <script src="panels/summary.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
