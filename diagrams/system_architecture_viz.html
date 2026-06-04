@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f0f13; color: #eee; padding: 24px 16px; min-height: 100vh; }
+  h1 { text-align: center; font-size: 1rem; color: #aaa; margin-bottom: 24px; letter-spacing: 0.05em; text-transform: uppercase; }
+
+  .pipeline { display: flex; flex-direction: column; align-items: center; gap: 0; max-width: 700px; margin: 0 auto; }
+
+  .layer { width: 100%; border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+  .layer:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+  .layer-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; }
+  .layer-header .label { font-size: 0.95rem; font-weight: 600; }
+  .layer-header .chevron { font-size: 0.75rem; transition: transform 0.3s; opacity: 0.7; }
+  .layer.open .chevron { transform: rotate(180deg); }
+
+  .layer-body { display: none; padding: 0 14px 14px; }
+  .layer.open .layer-body { display: block; }
+
+  .cards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .card { flex: 0 1 calc(20% - 10px); min-width: 120px; max-width: 160px; border-radius: 8px; padding: 10px 12px; }
+  .card .card-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+  .card .card-sub { font-size: 0.75rem; opacity: 0.8; line-height: 1.4; }
+
+  .arrow { width: 2px; height: 28px; background: #555; position: relative; display: flex; align-items: flex-end; justify-content: center; }
+  .arrow::after { content: '▼'; color: #666; font-size: 10px; position: absolute; bottom: -2px; }
+
+  /* Arrow inside layer (horizontal) */
+  .h-arrow { display: flex; align-items: center; color: #aaa; font-size: 14px; padding: 0 2px; align-self: center; flex-shrink: 0; }
+
+  .cards-seq { display: flex; align-items: center; flex-wrap: nowrap; gap: 4px; overflow-x: auto; padding-bottom: 4px; justify-content: center; }
+  .cards-seq .card { flex: 0 0 auto; min-width: 120px; max-width: none; }
+
+  /* Layer colours */
+  .l1 { background: #1a5c4a; }
+  .l1 .card { background: #1f6e58; }
+  .l2 { background: #3b2e8a; }
+  .l2 .card { background: #4535a0; }
+  .l3 { background: #7a2020; }
+  .l3 .card { background: #8f2828; }
+  .l4 { background: #7a5c00; }
+  .l4 .card { background: #8f6d00; }
+  .l5 { background: #2c2c2c; }
+  .l5 .card { background: #3a3a3a; }
+  .l6 { background: #1a3a6b; }
+  .l6 .card { background: #1e4580; }
+
+  .badge { display: inline-block; font-size: 0.65rem; background: rgba(255,255,255,0.15); border-radius: 4px; padding: 1px 6px; margin-bottom: 6px; letter-spacing: 0.04em; }
+
+  /* Layer 4 reasoning layout */
+  .trigger-row { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .trigger-card { background: #8a4a1a; border-radius: 8px; padding: 10px 12px; min-width: 150px; max-width: 180px; }
+  .trigger-card .card-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+  .trigger-card .card-sub { font-size: 0.75rem; opacity: 0.8; line-height: 1.4; }
+  .reasoning-modes { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .reasoning-modes .card { flex: 1; min-width: 120px; max-width: none; }
+  .up-arrows { display: flex; justify-content: space-around; color: #5dcaa5; font-size: 16px; margin: 2px 0; }
+  .evidence-card { background: #0f6e56; border-radius: 8px; padding: 12px 14px; text-align: center; }
+  .evidence-card .card-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+  .evidence-card .card-sub { font-size: 0.75rem; opacity: 0.85; }
+  .feeds-note { font-size: 0.7rem !important; opacity: 0.6; text-align: center; margin-top: 8px; font-style: italic; line-height: 1.4; }
+  .cards-wide { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cards-wide .card { flex: 1; min-width: 150px; max-width: none; }
+</style>
+</head>
+<body>
+<h1>Beacon System Pipeline</h1>
+
+<div class="pipeline" id="pipeline"></div>
+
+<script>
+const layers = [
+  {
+    id: 'l1', label: 'Layer 1 — Data Ingestion', type: 'seq',
+    components: [
+      { title: 'Reddit collection', sub: 'Raw post & comment harvesting' },
+    ]
+  },
+  {
+    id: 'l2', label: 'Layer 2 — Basic Techniques', type: 'grid', badge: '5 basic techniques',
+    components: [
+      { title: 'Text cleaning', sub: 'Noise removal, normalisation' },
+      { title: 'NER', sub: 'PERSON, ORG, PRODUCT' },
+      { title: 'URL extraction', sub: 'Link & source parsing' },
+      { title: 'Sentiment', sub: 'Positive / neutral / negative' },
+      { title: 'Topic clustering', sub: 'Trends over time' },
+    ]
+  },
+  {
+    id: 'l3', label: 'Layer 3 — Redeveloped LLM', type: 'grid', badge: 'multi-task heads',
+    components: [
+      { title: 'Shared base', sub: 'LLM encoder' },
+      { title: 'Crisis head', sub: 'Severity 0–3' },
+      { title: 'Sentiment head', sub: 'Fine-grained score' },
+      { title: 'Topic head', sub: 'Domain classify' },
+    ]
+  },
+  {
+    id: 'l4', label: 'Layer 4 — Agentic Reasoning Engine', type: 'reasoning',
+    trigger: { title: 'Crisis monitor', sub: 'Triggers reasoning' },
+    triggerTarget: { title: 'ReAct loop', sub: 'Thought, action, observe' },
+    components: [
+      { title: 'CoT', sub: 'Summary and insight' },
+      { title: 'ToT', sub: 'Recommendations' },
+      { title: 'ReAct output', sub: 'Severity and action' },
+    ],
+    evidence: { title: 'RAG — evidence & grounding layer', sub: 'Retrieves relevant posts from Reddit corpus + brand knowledge' }
+  },
+  {
+    id: 'l5', label: 'Layer 5 — LLM as a Judge', type: 'grid', badge: 'evaluation', wide: true,
+    components: [
+      { title: 'Alert quality', sub: 'Evaluates crisis alert accuracy' },
+      { title: 'Summary quality', sub: 'Scores executive summaries' },
+      { title: 'Recommendation score', sub: 'Rates action recommendations' },
+    ]
+  },
+  {
+    id: 'l6', label: 'Layer 6 — Output Generation', type: 'grid', wide: true,
+    components: [
+      { title: 'Crisis alert', sub: 'ReAct → severity + action' },
+      { title: 'Executive summary', sub: 'CoT synthesis' },
+      { title: 'Recommendations', sub: 'ToT → best path' },
+    ]
+  },
+];
+
+const pipeline = document.getElementById('pipeline');
+
+layers.forEach((layer, i) => {
+  // Arrow between layers
+  if (i > 0) {
+    const arr = document.createElement('div');
+    arr.className = 'arrow';
+    pipeline.appendChild(arr);
+  }
+
+  const el = document.createElement('div');
+  el.className = `layer ${layer.id}`;
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'layer-header';
+  hdr.innerHTML = `<span class="label">${layer.label}${layer.badge ? ` <span style="font-weight:400;opacity:0.7;font-size:0.8rem">(${layer.badge})</span>` : ''}</span><span class="chevron">▼</span>`;
+  el.appendChild(hdr);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'layer-body';
+
+  if (layer.type === 'reasoning') {
+    // Trigger row: crisis monitor → ReAct loop box
+    const trig = document.createElement('div');
+    trig.className = 'trigger-row';
+    trig.innerHTML = `<div class="trigger-card"><div class="card-title">${layer.trigger.title}</div><div class="card-sub">${layer.trigger.sub}</div></div><div class="h-arrow">→</div><div class="card" style="max-width:240px"><div class="card-title">${layer.triggerTarget.title}</div><div class="card-sub">${layer.triggerTarget.sub}</div></div>`;
+    body.appendChild(trig);
+
+    // Three reasoning modes side by side, no arrows between them
+    const modes = document.createElement('div');
+    modes.className = 'reasoning-modes';
+    layer.components.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-title">${c.title}</div><div class="card-sub">${c.sub}</div>`;
+      modes.appendChild(card);
+    });
+    body.appendChild(modes);
+
+    // Upward arrows: RAG feeds each mode
+    const ups = document.createElement('div');
+    ups.className = 'up-arrows';
+    ups.innerHTML = '▲▲▲'.split('').map(a => `<span>${a}</span>`).join('');
+    body.appendChild(ups);
+
+    // RAG evidence base
+    const ev = document.createElement('div');
+    ev.className = 'evidence-card';
+    ev.innerHTML = `<div class="card-title">${layer.evidence.title}</div><div class="card-sub">${layer.evidence.sub}</div>`;
+    body.appendChild(ev);
+
+    const note = document.createElement('div');
+    note.className = 'feeds-note';
+    note.style.cssText = 'font-size:0.7rem;opacity:0.6;text-align:center;margin-top:8px;font-style:italic;';
+    note.textContent = 'RAG feeds retrieved evidence up into each reasoning mode';
+    body.appendChild(note);
+  } else if (layer.type === 'seq') {
+    const wrap = document.createElement('div');
+    wrap.className = 'cards-seq';
+    layer.components.forEach((c, ci) => {
+      if (ci > 0) {
+        const ha = document.createElement('div');
+        ha.className = 'h-arrow';
+        ha.textContent = '→';
+        wrap.appendChild(ha);
+      }
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-title">${c.title}</div><div class="card-sub">${c.sub.replace(/\n/g,'<br>')}</div>`;
+      wrap.appendChild(card);
+    });
+    body.appendChild(wrap);
+  } else {
+    const wrap = document.createElement('div');
+    wrap.className = layer.wide ? 'cards-wide' : 'cards';
+    layer.components.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-title">${c.title}</div><div class="card-sub">${c.sub}</div>`;
+      wrap.appendChild(card);
+    });
+    body.appendChild(wrap);
+  }
+
+  el.appendChild(body);
+
+  // Toggle
+  hdr.addEventListener('click', () => el.classList.toggle('open'));
+
+  // Open by default
+  el.classList.add('open');
+
+  pipeline.appendChild(el);
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  window.addEventListener('load', () => {
+    const btn = document.createElement('button');
+    btn.textContent = 'Export PNG';
+    btn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:999;padding:8px 16px;background:#333;color:#eee;border:1px solid #555;border-radius:6px;cursor:pointer;font-size:0.85rem;';
+    document.body.appendChild(btn);
+
+    btn.addEventListener('click', () => {
+      const target = document.querySelector('.pipeline');
+      const originalBg = document.body.style.background;
+      document.body.style.background = 'transparent';
+
+      html2canvas(target, {
+        scale: 3,
+        backgroundColor: null,
+        useCORS: true,
+      }).then(canvas => {
+        document.body.style.background = originalBg;
+        const a = document.createElement('a');
+        a.download = 'beacon_pipeline.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+      });
+    });
+  });
+</script>
+</body>
+</html>
