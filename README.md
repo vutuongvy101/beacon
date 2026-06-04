@@ -123,13 +123,17 @@ cd frontend && python -m http.server 5500
 **Windows (PowerShell) step-by-step:**
 
 ```powershell
-# 1. Activate venv
+# 1. Create and activate venv
+python -m venv beacon-env
 beacon-env\Scripts\activate
 
-# 2. Export data JSONs
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Export data JSONs
 python scripts/export_dashboard_inputs.py --fast
 
-# 3. Start the server
+# 4. Start the server
 uvicorn backend.main:app --reload
 # → http://localhost:8000
 ```
