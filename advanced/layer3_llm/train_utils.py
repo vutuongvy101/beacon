@@ -262,10 +262,19 @@ def save_checkpoint(
     config: dict[str, Any],
     history: dict[str, list[float]] | None = None,
 ) -> None:
+    if arch == "lora" and hasattr(model, "merged_state_dict"):
+        state = {
+            k: v for k, v in model.merged_state_dict().items()
+            if k not in _TRAINING_ONLY_STATE_KEYS
+        }
+        save_arch = "standard"
+    else:
+        state = inference_state_dict(model)
+        save_arch = arch
     torch.save(
         {
-            "arch": arch,
-            "state_dict": inference_state_dict(model),
+            "arch": save_arch,
+            "state_dict": state,
             "topic_labels": TOPIC_LABELS,
             "config": config,
             "train_metrics": history or {},

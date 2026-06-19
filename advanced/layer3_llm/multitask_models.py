@@ -1,4 +1,4 @@
-"""Q-Former-style and standard multi-task RoBERTa architectures."""
+"""Q-Former-style, standard, and LoRA multi-task RoBERTa architectures."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from peft import LoraConfig, TaskType, get_peft_model
 from transformers import RobertaModel
 
 TOPIC_LABELS = [
@@ -290,3 +291,117 @@ class StandardMultiTaskRoberta(nn.Module):
 
     def set_loss_weights(self, loss_weights: dict[str, float]) -> None:
         self.loss_weights = dict(loss_weights)
+
+
+# ── LoRA variant ──────────────────────────────────────────────────────────────
+
+LORA_R = 8
+LORA_ALPHA = 16
+LORA_DROPOUT = 0.1
+
+
+class LoRAMultiTaskRoberta(nn.Module):
+    """RoBERTa with LoRA adapters on attention layers + multi-task heads.
+
+    Injects low-rank adapters (ΔW = BA) into the query and value projection
+    matrices of every encoder layer.  All base encoder weights stay frozen;
+    only the LoRA matrices and task heads are trained — typically ~300 K
+    trainable parameters vs ~14 M for ``StandardMultiTaskRoberta``.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "roberta-base",
+        num_topics: int = len(TOPIC_LABELS),
+        lora_r: int = LORA_R,
+        lora_alpha: int = LORA_ALPHA,
+        lora_dropout: float = LORA_DROPOUT,
+        crisis_class_weights: torch.Tensor | None = None,
+        loss_weights: dict[str, float] | None = None,
+    ) -> None:
+        super().__init__()
+        base_encoder = RobertaModel.from_pretrained(model_name)
+        hidden_size = base_encoder.config.hidden_size
+
+        lora_config = LoraConfig(
+            task_type=TaskType.FEATURE_EXTRACTION,
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=["query", "value"],
+        )
+        self.encoder = get_peft_model(base_encoder, lora_config)
+
+        if crisis_class_weights is not None:
+            self.register_buffer("crisis_class_weights", crisis_class_weights)
+        else:
+            self.crisis_class_weights = None
+        self.loss_weights = dict(loss_weights or LOSS_WEIGHTS)
+
+        self.crisis_head = nn.Linear(hidden_size, NUM_CRISIS)
+        self.sentiment_head = nn.Linear(hidden_size, 1)
+        self.topic_head = nn.Linear(hidden_size, num_topics)
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        crisis_labels: torch.Tensor | None = None,
+        sentiment_labels: torch.Tensor | None = None,
+        topic_labels: torch.Tensor | None = None,
+    ) -> dict[str, Any]:
+        hidden = self.encoder(
+            input_ids=input_ids, attention_mask=attention_mask
+        ).last_hidden_state
+        cls_vec = hidden[:, 0]
+
+        crisis_logits = self.crisis_head(cls_vec)
+        sentiment_pred = self.sentiment_head(cls_vec)
+        topic_logits = self.topic_head(cls_vec)
+
+        out: dict[str, Any] = {
+            "crisis_logits": crisis_logits,
+            "sentiment_pred": sentiment_pred,
+            "topic_logits": topic_logits,
+        }
+
+        if crisis_labels is not None and sentiment_labels is not None and topic_labels is not None:
+            losses = _task_losses(
+                crisis_logits,
+                sentiment_pred,
+                topic_logits,
+                crisis_labels,
+                sentiment_labels,
+                topic_labels,
+                loss_weights=self.loss_weights,
+                crisis_class_weights=self.crisis_class_weights,
+            )
+            out.update(losses)
+
+        return out
+
+    def count_trainable_params(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def set_loss_weights(self, w: dict[str, float]) -> None:
+        self.loss_weights = dict(w)
+
+    def merged_state_dict(self) -> dict[str, Any]:
+        """Merge LoRA weights into base encoder and return a flat state dict.
+
+        Uses a deep copy so the original model stays intact for further use.
+        The merged checkpoint can be loaded by ``StandardMultiTaskRoberta``
+        (with ``unfreeze_last_n=0``) so ``predict.py`` stays unchanged.
+        """
+        import copy
+
+        encoder_copy = copy.deepcopy(self.encoder)
+        merged_encoder = encoder_copy.merge_and_unload()
+        state: dict[str, Any] = {}
+        for k, v in merged_encoder.state_dict().items():
+            state[f"encoder.{k}"] = v
+        for name in ("crisis_head", "sentiment_head", "topic_head"):
+            head = getattr(self, name)
+            for k, v in head.state_dict().items():
+                state[f"{name}.{k}"] = v
+        return state
