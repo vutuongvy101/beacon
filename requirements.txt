@@ -15,6 +15,7 @@ spacy>=3.7
 gensim>=4.3
 bertopic>=0.16
 sentence-transformers>=2.7
+peft>=0.11
 
 # ── utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0

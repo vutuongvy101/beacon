@@ -1,14 +1,20 @@
-"""External ChatGPT labeling helpers — export batch, validate, load pseudo-labels."""
+"""Pseudo-label helpers — Ollama / HuggingFace / heuristic (no OpenAI API required)."""
 
 from __future__ import annotations
 
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from advanced.layer3_llm.multitask_models import TOPIC_LABELS
+
+DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+DEFAULT_HF_MODEL = os.getenv("A1_HF_LABEL_MODEL", "Qwen/Qwen2.5-3B")
 
 REQUIRED_PSEUDO_COLUMNS = [
     "post_id",
@@ -194,6 +200,293 @@ def compare_pseudo_to_gold(
             metrics["sentiment_pearson_r"] = float("nan")
     return overlap, metrics
 
+
+# ── Label backends (Ollama → HF → heuristic) ───────────────────────────────────
+
+def heuristic_label(text: str) -> dict[str, Any]:
+    """Rule-based pseudo-labels — zero API cost, useful offline / on Colab."""
+    t = text.lower()
+    crisis_kw = ["outage", "breach", "boycott", "lawsuit", "ban", "dangerous", "hack", "leak", "down globally"]
+    esc_kw = ["layoff", "backlash", "trust", "scandal", "resign", "protest", "investigation"]
+    minor_kw = ["expensive", "slow", "broken", "disappoint", "cancel", "bug", "limit", "annoyed", "frustrating"]
+    pos_kw = ["amazing", "love", "great", "incredible", "best", "awesome", "flawless", "insane"]
+
+    sev = 0
+    if any(k in t for k in crisis_kw) or ("down" in t and "chatgpt" in t):
+        sev = 3
+    elif any(k in t for k in esc_kw):
+        sev = 2
+    elif any(k in t for k in minor_kw):
+        sev = 1
+
+    pos = sum(1 for k in pos_kw if k in t)
+    neg = sum(1 for k in minor_kw if k in t) + sum(1 for k in crisis_kw if k in t)
+    sent = float(np.clip((pos - neg) / 3.0, -1, 1))
+
+    topic = "general_discussion"
+    if any(k in t for k in ["price", "subscription", "cost", "billing", "plan"]):
+        topic = "pricing_subscriptions"
+    elif any(k in t for k in ["api", "developer", "codex", "rate limit", "token"]):
+        topic = "api_developer"
+    elif any(k in t for k in ["gpt", "release", "model", "feature", "sora", "dall"]):
+        topic = "product_releases"
+    elif any(k in t for k in ["safety", "ethics", "alignment", "bias", "weapon", "privacy"]):
+        topic = "safety_ethics"
+    elif any(k in t for k in ["altman", "board", "ceo", "leadership", "corporate"]):
+        topic = "corporate_leadership"
+    elif any(k in t for k in ["anthropic", "google", "gemini", "grok", "claude", "deepseek"]):
+        topic = "competition"
+    elif any(k in t for k in ["outage", " is down", "error 500", "not working"]):
+        topic = "reliability_outages"
+
+    return {
+        "crisis_severity": sev,
+        "sentiment_score": sent,
+        "topic": topic,
+        "rationale": "heuristic rules",
+    }
+
+
+def parse_labels_json(content: str) -> list[dict[str, Any]]:
+    """Extract a JSON array of label objects from an LLM response."""
+    text = (content or "").strip()
+    if not text:
+        return []
+
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fence:
+        text = fence.group(1).strip()
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("[")
+        end = text.rfind("]")
+        if start < 0 or end <= start:
+            return []
+        parsed = json.loads(text[start : end + 1])
+
+    if isinstance(parsed, list):
+        return [x for x in parsed if isinstance(x, dict)]
+    if isinstance(parsed, dict):
+        for key in ("labels", "posts", "results", "data"):
+            if isinstance(parsed.get(key), list):
+                return [x for x in parsed[key] if isinstance(x, dict)]
+    return []
+
+
+def normalize_label_row(row: dict[str, Any], text_map: dict[str, str]) -> dict[str, Any] | None:
+    try:
+        topic = str(row["topic"])
+        if topic not in TOPIC_LABELS:
+            topic = "general_discussion"
+        pid = str(row["post_id"])
+        return {
+            "post_id": pid,
+            "text": str(row.get("text") or text_map.get(pid, ""))[:1500],
+            "crisis_severity": int(row["crisis_severity"]),
+            "sentiment_score": float(np.clip(float(row["sentiment_score"]), -1.0, 1.0)),
+            "topic": topic,
+            "rationale": str(row.get("rationale", ""))[:300],
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def resolve_label_backend() -> str:
+    """Pick labeler: ollama (local) → hf (Colab GPU) → heuristic (always works)."""
+    override = os.getenv("A1_LABEL_BACKEND", "auto").lower()
+    if override in {"ollama", "hf", "heuristic"}:
+        return override
+
+    from shared.ollama_client import ollama_available
+
+    if ollama_available():
+        return "ollama"
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "hf"
+    except ImportError:
+        pass
+    return "heuristic"
+
+
+def label_backend_display_name(backend: str, *, ollama_model: str, hf_model: str) -> str:
+    if backend == "ollama":
+        return f"Ollama/{ollama_model}"
+    if backend == "hf":
+        return f"HF/{hf_model}"
+    return "heuristic rules"
+
+
+def _query_ollama_batch(batch_records: list[dict], *, model: str) -> list[dict[str, Any]]:
+    from shared.ollama_client import query_ollama
+
+    prompt = build_labeling_prompt(batch_records)
+    content = query_ollama(prompt, system=system_prompt(), model=model, json_mode=True)
+    return parse_labels_json(content)
+
+
+_hf_bundle: tuple[Any, Any, Any] | None = None
+
+
+def _get_hf_bundle(model_name: str):
+    global _hf_bundle
+    if _hf_bundle is not None:
+        return _hf_bundle
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if device.type == "cuda" and torch.cuda.is_bf16_supported():
+        dtype = torch.bfloat16
+    elif device.type == "cuda":
+        dtype = torch.float16
+    else:
+        dtype = torch.float32
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=dtype,
+        low_cpu_mem_usage=True,
+    )
+    model.to(device)
+    model.eval()
+    _hf_bundle = (tokenizer, model, device)
+    return _hf_bundle
+
+
+def _is_instruct_model(model_name: str) -> bool:
+    return "instruct" in model_name.lower()
+
+
+def _build_hf_prompt(batch_records: list[dict]) -> str:
+    return (
+        f"{system_prompt()}\n\n"
+        f"{build_labeling_prompt(batch_records)}\n\n"
+        "Respond with ONLY a JSON array of label objects. No markdown fences or commentary."
+    )
+
+
+def _query_hf_batch(batch_records: list[dict], *, model_name: str) -> list[dict[str, Any]]:
+    import torch
+
+    tokenizer, model, device = _get_hf_bundle(model_name)
+    if _is_instruct_model(model_name):
+        user_prompt = build_labeling_prompt(batch_records)
+        messages = [
+            {"role": "system", "content": system_prompt()},
+            {"role": "user", "content": user_prompt},
+        ]
+        prompt_text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    else:
+        prompt_text = _build_hf_prompt(batch_records)
+
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+    with torch.inference_mode():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=4096,
+            do_sample=False,
+        )
+    text = tokenizer.decode(output[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True)
+    return parse_labels_json(text)
+
+
+def label_batch_records(
+    batch_records: list[dict[str, str]],
+    *,
+    backend: str,
+    ollama_model: str = DEFAULT_OLLAMA_MODEL,
+    hf_model: str = DEFAULT_HF_MODEL,
+) -> list[dict[str, Any]]:
+    """Label one batch of {post_id, text} records."""
+    if backend == "heuristic":
+        rows = []
+        for rec in batch_records:
+            h = heuristic_label(str(rec["text"]))
+            rows.append({"post_id": rec["post_id"], "text": rec["text"], **h})
+        return rows
+    if backend == "ollama":
+        return _query_ollama_batch(batch_records, model=ollama_model)
+    if backend == "hf":
+        return _query_hf_batch(batch_records, model_name=hf_model)
+    raise ValueError(f"Unknown label backend: {backend}")
+
+
+def label_dataframe(
+    df: pd.DataFrame,
+    *,
+    text_col: str = "text",
+    batch_size: int = 10,
+    backend: str | None = None,
+    ollama_model: str = DEFAULT_OLLAMA_MODEL,
+    hf_model: str = DEFAULT_HF_MODEL,
+    sample_n: int | None = 500,
+    seed: int = 42,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Pseudo-label posts using Ollama, HuggingFace, or heuristic rules."""
+    backend = backend or resolve_label_backend()
+    work = df.sample(n=min(sample_n or len(df), len(df)), random_state=seed).reset_index(drop=True)
+
+    records_out: list[dict[str, Any]] = []
+    failures: list[str] = []
+
+    for start in range(0, len(work), batch_size):
+        batch = work.iloc[start : start + batch_size]
+        batch_records = [
+            {"post_id": str(row["post_id"]), "text": str(row[text_col])[:1500]}
+            for _, row in batch.iterrows()
+        ]
+        text_map = {r["post_id"]: r["text"] for r in batch_records}
+
+        try:
+            labels = label_batch_records(
+                batch_records,
+                backend=backend,
+                ollama_model=ollama_model,
+                hf_model=hf_model,
+            )
+        except Exception:
+            if backend != "heuristic":
+                labels = label_batch_records(batch_records, backend="heuristic")
+            else:
+                failures.extend(r["post_id"] for r in batch_records)
+                continue
+
+        if not labels:
+            if backend != "heuristic":
+                labels = label_batch_records(batch_records, backend="heuristic")
+            else:
+                failures.extend(r["post_id"] for r in batch_records)
+                continue
+
+        for item in labels:
+            normalized = normalize_label_row(item, text_map)
+            if normalized is None:
+                failures.append(str(item.get("post_id", "unknown")))
+                continue
+            records_out.append(normalized)
+
+    pseudo_df = validate_pseudo_labels(pd.DataFrame(records_out))
+    meta = {
+        "backend": backend,
+        "label_source": label_backend_display_name(backend, ollama_model=ollama_model, hf_model=hf_model),
+        "failures": failures,
+        "labeled": len(records_out),
+    }
+    return pseudo_df, meta
+
+
 def export_labeling_batch(
     df: pd.DataFrame,
     path: Path,
@@ -202,7 +495,7 @@ def export_labeling_batch(
     n: int = 500,
     seed: int = 42,
 ) -> pd.DataFrame:
-    """Write a deterministic JSON batch for external ChatGPT labeling."""
+    """Write a deterministic JSON batch for optional manual / external labeling."""
     sample = df.sample(n=min(n, len(df)), random_state=seed).reset_index(drop=True)
     records = [
         {"post_id": row["post_id"], "text": str(row[text_col])[:1500]}
@@ -240,10 +533,8 @@ def load_pseudo_labels(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"Missing {path}\n\n"
-            "Labeling is done externally via ChatGPT (see chatgpt_labeling_prompt.md):\n"
-            "  1. Export batch: posts_for_labeling.json (cell below)\n"
-            "  2. Paste prompt + JSON into ChatGPT\n"
-            "  3. Save response as pseudo_labels.csv in outputs/\n"
+            "Generate labels in the A1 notebook (Section 1) using Ollama, HuggingFace, or heuristic rules,\n"
+            "or place a committed pseudo_labels.csv in outputs/.\n"
         )
     raw = path.read_text(encoding="utf-8")
     if raw.lstrip().startswith("["):
