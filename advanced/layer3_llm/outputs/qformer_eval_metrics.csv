@@ -1,0 +1,2 @@
+crisis_accuracy,crisis_f1_macro,crisis_confusion_matrix,sentiment_mae,sentiment_rmse,topic_accuracy,topic_f1_macro,avg_score
+0.676,0.2016706443914081,"[[169, 0, 0, 0], [30, 0, 0, 0], [21, 0, 0, 0], [30, 0, 0, 0]]",0.24786914955576259,0.31007318892792096,0.548,0.15979333457456713,0.41250980139603133

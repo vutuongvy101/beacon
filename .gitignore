@@ -26,3 +26,7 @@ beacon-env/
 # Large / generated (uncomment if you prefer not to commit built indices)
 # data/faiss_index/*
 # !data/faiss_index/.gitkeep
+
+# Layer 3 training checkpoints (large; regenerate via A1 notebook)
+advanced/layer3_llm/outputs/*.pt
+advanced/layer3_llm/outputs/bertopic_b5_baseline
