@@ -24,7 +24,8 @@ TOPIC_LABELS = [
 NUM_CRISIS = 4
 NUM_QUERIES = 6
 NUM_XATTN_LAYERS = 2
-LOSS_WEIGHTS = {"crisis": 1.0, "sentiment": 8.0, "topic": 0.4}
+LOSS_WEIGHTS = {"crisis": 1.5, "sentiment": 4.0, "topic": 0.25}
+LABEL_SMOOTHING = 0.05
 
 
 class CrossAttentionBlock(nn.Module):
@@ -123,9 +124,14 @@ def _task_losses(
     loss_weights: dict[str, float],
     crisis_class_weights: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
-    loss_crisis = F.cross_entropy(crisis_logits, crisis_labels, weight=crisis_class_weights)
+    loss_crisis = F.cross_entropy(
+        crisis_logits,
+        crisis_labels,
+        weight=crisis_class_weights,
+        label_smoothing=LABEL_SMOOTHING,
+    )
     loss_sentiment = F.mse_loss(sentiment_pred.squeeze(-1), sentiment_labels.float())
-    loss_topic = F.cross_entropy(topic_logits, topic_labels)
+    loss_topic = F.cross_entropy(topic_logits, topic_labels, label_smoothing=LABEL_SMOOTHING)
     total = (
         loss_weights["crisis"] * loss_crisis
         + loss_weights["sentiment"] * loss_sentiment

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import time
 from typing import Any
@@ -62,6 +63,58 @@ class MultiTaskDataset(Dataset):
         }
 
 
+_AUTO_LOSS_WEIGHT_MIN = 0.25
+_AUTO_LOSS_WEIGHT_MAX = 5.0
+_CRISIS_WEIGHT_MAX_RATIO = 4.0
+
+
+def compute_crisis_class_weights(
+    counts: pd.Series | np.ndarray,
+    *,
+    num_classes: int = 4,
+    max_ratio: float = _CRISIS_WEIGHT_MAX_RATIO,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    """Sqrt inverse-frequency CE weights, capped to avoid rare-class collapse."""
+    if isinstance(counts, pd.Series):
+        arr = np.array([float(counts.get(i, 0)) for i in range(num_classes)], dtype=float)
+    else:
+        arr = np.asarray(counts, dtype=float)
+        if arr.shape[0] < num_classes:
+            padded = np.zeros(num_classes, dtype=float)
+            padded[: arr.shape[0]] = arr
+            arr = padded
+
+    inv = np.zeros(num_classes, dtype=float)
+    present = arr > 0
+    inv[present] = 1.0 / np.sqrt(arr[present])
+    if inv.sum() <= 0:
+        weights = np.ones(num_classes, dtype=float)
+    else:
+        weights = inv / inv.sum() * num_classes
+        positive = weights[weights > 0]
+        w_min = float(positive.min())
+        weights = np.clip(weights, w_min / max_ratio, w_min * max_ratio)
+        weights = weights / weights.sum() * num_classes
+
+    tensor = torch.tensor(weights, dtype=torch.float)
+    return tensor.to(device) if device is not None else tensor
+
+
+def compute_crisis_sample_weights(
+    crisis_labels: pd.Series,
+    counts: pd.Series,
+) -> torch.Tensor:
+    """Per-example sampler weights using the same sqrt scheme as CE weights."""
+    sample_weights = crisis_labels.map(
+        lambda severity: 1.0 / np.sqrt(max(float(counts.get(severity, 0)), 1.0))
+    ).to_numpy(dtype=np.float64)
+    total = sample_weights.sum()
+    if total <= 0:
+        return torch.ones(len(sample_weights), dtype=torch.double)
+    return torch.tensor(sample_weights / total * len(sample_weights), dtype=torch.double)
+
+
 def get_device() -> torch.device:
     """Pick compute device; default to CPU on macOS (MPS has checkpoint reload bugs)."""
     override = os.getenv("LAYER3_DEVICE", "").lower()
@@ -111,6 +164,8 @@ def train_model(
 
     t0 = time.perf_counter()
     best_val = float("inf")
+    best_epoch = 0
+    best_state: dict[str, torch.Tensor] | None = None
     stale_epochs = 0
 
     for epoch in range(epochs):
@@ -121,6 +176,7 @@ def train_model(
             optimizer.zero_grad()
             out = model(**batch)
             out["loss"].backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             scheduler.step()
             for key in train_totals:
@@ -160,19 +216,30 @@ def train_model(
             weights = {k: 1.0 / max(v, 1e-6) for k, v in losses.items()}
             scale = weights.get("crisis", 1.0) or 1.0
             weights = {k: v / scale for k, v in weights.items()}
+            weights = {
+                k: float(np.clip(v, _AUTO_LOSS_WEIGHT_MIN, _AUTO_LOSS_WEIGHT_MAX))
+                for k, v in weights.items()
+            }
             model.set_loss_weights(weights)
-            print(f"Auto-tuned loss weights after epoch 1: {weights}")
+            print(f"Auto-tuned loss weights after epoch 1 (capped): {weights}")
 
-        if early_stopping_patience is not None:
-            current = history["val_loss"][-1]
-            if current < best_val - min_delta:
-                best_val = current
-                stale_epochs = 0
-            else:
-                stale_epochs += 1
-                if stale_epochs >= early_stopping_patience:
-                    print(f"Early stopping at epoch {epoch + 1}.")
-                    break
+        current = history["val_loss"][-1]
+        if current < best_val - min_delta:
+            best_val = current
+            best_epoch = epoch + 1
+            stale_epochs = 0
+            best_state = copy.deepcopy(
+                {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            )
+        elif early_stopping_patience is not None:
+            stale_epochs += 1
+            if stale_epochs >= early_stopping_patience:
+                print(f"Early stopping at epoch {epoch + 1}.")
+                break
+
+    if best_state is not None:
+        model.load_state_dict({k: v.to(device) for k, v in best_state.items()})
+        print(f"Restored best weights from epoch {best_epoch} (val_loss={best_val:.4f}).")
 
     return history, time.perf_counter() - t0
 
