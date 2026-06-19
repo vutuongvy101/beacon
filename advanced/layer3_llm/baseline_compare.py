@@ -114,8 +114,8 @@ def load_b5_model(path: Path) -> BERTopic:
 
 
 def b5_checkpoint_ready(path: Path) -> bool:
-    """True when a prior BERTopic export exists (single-file save in current bertopic)."""
-    return path.is_file()
+    """True when a prior BERTopic export exists (file or folder save)."""
+    return path.exists() and (path.is_file() or path.is_dir())
 
 
 def predict_b5_topic_slugs(model: BERTopic, texts: list[str]) -> list[str]:

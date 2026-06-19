@@ -127,8 +127,15 @@ def system_prompt() -> str:
     )
 
 
+def _few_shot_examples() -> list[dict[str, Any]]:
+    if os.getenv("A1_COMPACT_RUBRIC", "0").lower() in ("1", "true", "yes"):
+        return FEW_SHOT_EXAMPLES[:3]
+    n = int(os.getenv("A1_FEW_SHOT", str(len(FEW_SHOT_EXAMPLES))))
+    return FEW_SHOT_EXAMPLES[: max(1, min(n, len(FEW_SHOT_EXAMPLES)))]
+
+
 def build_labeling_prompt(batch_records: list[dict]) -> str:
-    few_shot = "\n".join(json.dumps(x, ensure_ascii=False) for x in FEW_SHOT_EXAMPLES)
+    few_shot = "\n".join(json.dumps(x, ensure_ascii=False) for x in _few_shot_examples())
     payload = json.dumps(batch_records, ensure_ascii=False)
     return (
         "Examples:\n"
@@ -294,7 +301,10 @@ def normalize_label_row(row: dict[str, Any], text_map: dict[str, str]) -> dict[s
 
 
 def resolve_label_backend() -> str:
-    """Pick labeler: ollama (local) → hf (Colab GPU) → heuristic (always works)."""
+    """Pick labeler: ollama (local) → heuristic (fast default).
+
+    HF Qwen on CUDA is opt-in via ``A1_LABEL_BACKEND=hf`` (~45–90 min for 500 posts).
+    """
     override = os.getenv("A1_LABEL_BACKEND", "auto").lower()
     if override in {"ollama", "hf", "heuristic"}:
         return override
@@ -303,13 +313,6 @@ def resolve_label_backend() -> str:
 
     if ollama_available():
         return "ollama"
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            return "hf"
-    except ImportError:
-        pass
     return "heuristic"
 
 
@@ -392,10 +395,11 @@ def _query_hf_batch(batch_records: list[dict], *, model_name: str) -> list[dict[
         prompt_text = _build_hf_prompt(batch_records)
 
     inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+    max_new = min(2048, 200 * len(batch_records) + 128)
     with torch.inference_mode():
         output = model.generate(
             **inputs,
-            max_new_tokens=4096,
+            max_new_tokens=max_new,
             do_sample=False,
         )
     text = tokenizer.decode(output[0][inputs["input_ids"].shape[-1] :], skip_special_tokens=True)
@@ -441,7 +445,20 @@ def label_dataframe(
     records_out: list[dict[str, Any]] = []
     failures: list[str] = []
 
-    for start in range(0, len(work), batch_size):
+    batch_starts = range(0, len(work), batch_size)
+    if backend == "heuristic":
+        batch_iter = batch_starts
+    else:
+        from tqdm.auto import tqdm
+
+        n_batches = (len(work) + batch_size - 1) // batch_size
+        batch_iter = tqdm(
+            batch_starts,
+            desc=f"Pseudo-labeling ({backend})",
+            total=n_batches,
+        )
+
+    for start in batch_iter:
         batch = work.iloc[start : start + batch_size]
         batch_records = [
             {"post_id": str(row["post_id"]), "text": str(row[text_col])[:1500]}
