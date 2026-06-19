@@ -12,7 +12,7 @@ from advanced.layer3_llm.multitask_models import (
     StandardMultiTaskRoberta,
     TOPIC_LABELS,
 )
-from advanced.layer3_llm.train_utils import get_device
+from advanced.layer3_llm.train_utils import get_device, load_model_state_dict
 
 _MODEL: QFormerMultiTaskRoberta | StandardMultiTaskRoberta | None = None
 _TOKENIZER: RobertaTokenizer | None = None
@@ -59,7 +59,7 @@ def _load_model() -> None:
             num_queries=int(config.get("num_queries", 6)),
             num_xattn_layers=int(config.get("num_xattn_layers", 2)),
         )
-    _MODEL.load_state_dict(ckpt["state_dict"])
+    load_model_state_dict(_MODEL, ckpt["state_dict"])
     _MODEL.to(_DEVICE)
     _MODEL.eval()
 

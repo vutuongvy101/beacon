@@ -231,6 +231,28 @@ def evaluate_predictions(
     }
 
 
+_TRAINING_ONLY_STATE_KEYS = frozenset({"crisis_class_weights"})
+
+
+def inference_state_dict(model: torch.nn.Module) -> dict[str, Any]:
+    """Strip training-only buffers before saving or loading for inference."""
+    return {
+        k: v
+        for k, v in model.state_dict().items()
+        if k not in _TRAINING_ONLY_STATE_KEYS
+    }
+
+
+def load_model_state_dict(model: torch.nn.Module, state_dict: dict[str, Any]) -> None:
+    """Load weights, ignoring training-only keys such as crisis_class_weights."""
+    filtered = {k: v for k, v in state_dict.items() if k not in _TRAINING_ONLY_STATE_KEYS}
+    missing, unexpected = model.load_state_dict(filtered, strict=False)
+    if unexpected:
+        raise RuntimeError(f"Unexpected keys when loading checkpoint: {unexpected}")
+    if missing:
+        raise RuntimeError(f"Missing keys when loading checkpoint: {missing}")
+
+
 def save_checkpoint(
     path,
     model: torch.nn.Module,
@@ -241,7 +263,7 @@ def save_checkpoint(
     torch.save(
         {
             "arch": arch,
-            "state_dict": model.state_dict(),
+            "state_dict": inference_state_dict(model),
             "topic_labels": TOPIC_LABELS,
             "config": config,
             "train_metrics": history or {},
