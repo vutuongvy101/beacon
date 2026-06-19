@@ -22,7 +22,6 @@ from transformers import RobertaTokenizer, get_linear_schedule_with_warmup
 
 from advanced.layer3_llm.multitask_models import TOPIC_LABELS
 
-
 class MultiTaskDataset(Dataset):
     """Tokenised multi-task dataset."""
 
@@ -81,6 +80,9 @@ def train_model(
     epochs: int = 3,
     lr: float = 2e-4,
     device: torch.device | None = None,
+    early_stopping_patience: int | None = None,
+    min_delta: float = 0.0,
+    auto_loss_weights: bool = False,
 ) -> tuple[dict[str, list[float]], float]:
     """Train a multi-task model; return history and wall-clock seconds."""
     device = device or get_device()
@@ -108,6 +110,9 @@ def train_model(
     }
 
     t0 = time.perf_counter()
+    best_val = float("inf")
+    stale_epochs = 0
+
     for epoch in range(epochs):
         model.train()
         train_totals = {"loss": 0.0, "loss_crisis": 0.0, "loss_sentiment": 0.0, "loss_topic": 0.0}
@@ -145,6 +150,29 @@ def train_model(
             f"sent={history['val_loss_sentiment'][-1]:.4f}, "
             f"topic={history['val_loss_topic'][-1]:.4f})"
         )
+
+        if auto_loss_weights and epoch == 0 and hasattr(model, "set_loss_weights"):
+            losses = {
+                "crisis": history["val_loss_crisis"][-1],
+                "sentiment": history["val_loss_sentiment"][-1],
+                "topic": history["val_loss_topic"][-1],
+            }
+            weights = {k: 1.0 / max(v, 1e-6) for k, v in losses.items()}
+            scale = weights.get("crisis", 1.0) or 1.0
+            weights = {k: v / scale for k, v in weights.items()}
+            model.set_loss_weights(weights)
+            print(f"Auto-tuned loss weights after epoch 1: {weights}")
+
+        if early_stopping_patience is not None:
+            current = history["val_loss"][-1]
+            if current < best_val - min_delta:
+                best_val = current
+                stale_epochs = 0
+            else:
+                stale_epochs += 1
+                if stale_epochs >= early_stopping_patience:
+                    print(f"Early stopping at epoch {epoch + 1}.")
+                    break
 
     return history, time.perf_counter() - t0
 
@@ -189,7 +217,6 @@ def evaluate_predictions(
     topic_f1 = f1_score(y_topic_true, y_topic_pred, average="macro", zero_division=0)
     sent_mae = mean_absolute_error(y_sent_true, y_sent_pred)
     sent_rmse = float(np.sqrt(mean_squared_error(y_sent_true, y_sent_pred)))
-
     return {
         "crisis_accuracy": accuracy_score(y_crisis_true, y_crisis_pred),
         "crisis_f1_macro": crisis_f1,

@@ -1,4 +1,4 @@
-"""Phase 2 export — run trained Q-Former multi-task model on a single post."""
+"""Phase 2 export — run trained multi-task model on a single post."""
 
 from __future__ import annotations
 
@@ -7,10 +7,14 @@ from pathlib import Path
 import torch
 from transformers import RobertaTokenizer
 
-from advanced.layer3_llm.multitask_models import QFormerMultiTaskRoberta, TOPIC_LABELS
+from advanced.layer3_llm.multitask_models import (
+    QFormerMultiTaskRoberta,
+    StandardMultiTaskRoberta,
+    TOPIC_LABELS,
+)
 from advanced.layer3_llm.train_utils import get_device
 
-_MODEL: QFormerMultiTaskRoberta | None = None
+_MODEL: QFormerMultiTaskRoberta | StandardMultiTaskRoberta | None = None
 _TOKENIZER: RobertaTokenizer | None = None
 _TOPIC_LABELS: list[str] = list(TOPIC_LABELS)
 _MAX_LENGTH: int = 256
@@ -18,7 +22,7 @@ _DEVICE: torch.device | None = None
 
 
 def _checkpoint_path() -> Path:
-    return Path(__file__).resolve().parent / "outputs" / "qformer_model.pt"
+    return Path(__file__).resolve().parent / "outputs" / "multitask_model.pt"
 
 
 def _load_model() -> None:
@@ -30,7 +34,7 @@ def _load_model() -> None:
     ckpt_path = _checkpoint_path()
     if not ckpt_path.exists():
         raise FileNotFoundError(
-            f"Q-Former checkpoint not found: {ckpt_path}\n"
+            f"Multi-task checkpoint not found: {ckpt_path}\n"
             "Run advanced/A1_redeveloped_llm.ipynb through Section 3 first."
         )
 
@@ -41,12 +45,20 @@ def _load_model() -> None:
     _TOPIC_LABELS = ckpt.get("topic_labels", TOPIC_LABELS)
 
     _TOKENIZER = RobertaTokenizer.from_pretrained(config.get("model_name", "roberta-base"))
-    _MODEL = QFormerMultiTaskRoberta(
-        model_name=config.get("model_name", "roberta-base"),
-        num_topics=len(_TOPIC_LABELS),
-        num_queries=int(config.get("num_queries", 6)),
-        num_xattn_layers=int(config.get("num_xattn_layers", 2)),
-    )
+    arch = ckpt.get("arch", "qformer")
+    if arch == "standard":
+        _MODEL = StandardMultiTaskRoberta(
+            model_name=config.get("model_name", "roberta-base"),
+            num_topics=len(_TOPIC_LABELS),
+            unfreeze_last_n=int(config.get("unfreeze_last_n", 0)),
+        )
+    else:
+        _MODEL = QFormerMultiTaskRoberta(
+            model_name=config.get("model_name", "roberta-base"),
+            num_topics=len(_TOPIC_LABELS),
+            num_queries=int(config.get("num_queries", 6)),
+            num_xattn_layers=int(config.get("num_xattn_layers", 2)),
+        )
     _MODEL.load_state_dict(ckpt["state_dict"])
     _MODEL.to(_DEVICE)
     _MODEL.eval()
@@ -54,7 +66,7 @@ def _load_model() -> None:
 
 def predict(text: str) -> dict:
     """
-    Run the trained Q-Former multi-task model on a single Reddit post.
+    Run the trained multi-task model on a single Reddit post.
 
     Args:
         text: Raw or cleaned post text.

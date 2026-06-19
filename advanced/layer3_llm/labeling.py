@@ -18,7 +18,6 @@ REQUIRED_PSEUDO_COLUMNS = [
     "rationale",
 ]
 
-
 def export_labeling_batch(
     df: pd.DataFrame,
     path: Path,
@@ -70,7 +69,24 @@ def load_pseudo_labels(path: Path) -> pd.DataFrame:
             "  2. Paste prompt + JSON into ChatGPT\n"
             "  3. Save response as pseudo_labels.csv in outputs/\n"
         )
-    return validate_pseudo_labels(pd.read_csv(path))
+    raw = path.read_text(encoding="utf-8")
+    if raw.lstrip().startswith("["):
+        labels = json.loads(raw)
+        df = pd.DataFrame(labels)
+        if "text" not in df.columns or df["text"].isna().any():
+            posts_path = path.parent / "posts_for_labeling.json"
+            if posts_path.exists():
+                posts = json.loads(posts_path.read_text(encoding="utf-8"))
+                text_map = {str(item["post_id"]): str(item.get("text", "")) for item in posts}
+                df["post_id"] = df["post_id"].astype(str)
+                df["text"] = df.get("text", "").map(lambda _: "") if "text" in df.columns else ""
+                df["text"] = df["post_id"].map(text_map).fillna(df["text"])
+    else:
+        df = pd.read_csv(path)
+    try:
+        return validate_pseudo_labels(df)
+    except Exception as exc:
+        raise
 
 
 def merge_chatgpt_response(

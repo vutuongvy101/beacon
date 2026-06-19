@@ -23,7 +23,7 @@ TOPIC_LABELS = [
 NUM_CRISIS = 4
 NUM_QUERIES = 6
 NUM_XATTN_LAYERS = 2
-LOSS_WEIGHTS = {"crisis": 1.0, "sentiment": 0.5, "topic": 0.5}
+LOSS_WEIGHTS = {"crisis": 1.0, "sentiment": 8.0, "topic": 0.4}
 
 
 class CrossAttentionBlock(nn.Module):
@@ -101,6 +101,16 @@ def _freeze_encoder(encoder: RobertaModel) -> None:
         param.requires_grad = False
 
 
+def _set_encoder_trainable(encoder: RobertaModel, *, unfreeze_last_n: int = 0) -> None:
+    _freeze_encoder(encoder)
+    if unfreeze_last_n <= 0:
+        return
+    layers = encoder.encoder.layer
+    for layer in layers[-unfreeze_last_n:]:
+        for param in layer.parameters():
+            param.requires_grad = True
+
+
 def _task_losses(
     crisis_logits: torch.Tensor,
     sentiment_pred: torch.Tensor,
@@ -108,14 +118,17 @@ def _task_losses(
     crisis_labels: torch.Tensor,
     sentiment_labels: torch.Tensor,
     topic_labels: torch.Tensor,
+    *,
+    loss_weights: dict[str, float],
+    crisis_class_weights: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
-    loss_crisis = F.cross_entropy(crisis_logits, crisis_labels)
+    loss_crisis = F.cross_entropy(crisis_logits, crisis_labels, weight=crisis_class_weights)
     loss_sentiment = F.mse_loss(sentiment_pred.squeeze(-1), sentiment_labels.float())
     loss_topic = F.cross_entropy(topic_logits, topic_labels)
     total = (
-        LOSS_WEIGHTS["crisis"] * loss_crisis
-        + LOSS_WEIGHTS["sentiment"] * loss_sentiment
-        + LOSS_WEIGHTS["topic"] * loss_topic
+        loss_weights["crisis"] * loss_crisis
+        + loss_weights["sentiment"] * loss_sentiment
+        + loss_weights["topic"] * loss_topic
     )
     return {
         "loss": total,
@@ -134,11 +147,18 @@ class QFormerMultiTaskRoberta(nn.Module):
         num_topics: int = len(TOPIC_LABELS),
         num_queries: int = NUM_QUERIES,
         num_xattn_layers: int = NUM_XATTN_LAYERS,
+        crisis_class_weights: torch.Tensor | None = None,
+        loss_weights: dict[str, float] | None = None,
     ) -> None:
         super().__init__()
         self.encoder = RobertaModel.from_pretrained(model_name)
         hidden_size = self.encoder.config.hidden_size
         _freeze_encoder(self.encoder)
+        if crisis_class_weights is not None:
+            self.register_buffer("crisis_class_weights", crisis_class_weights)
+        else:
+            self.crisis_class_weights = None
+        self.loss_weights = dict(loss_weights or LOSS_WEIGHTS)
 
         self.crisis_tower = TaskQueryTower(hidden_size, num_queries, num_xattn_layers)
         self.sentiment_tower = TaskQueryTower(hidden_size, num_queries, num_xattn_layers)
@@ -190,6 +210,8 @@ class QFormerMultiTaskRoberta(nn.Module):
                 crisis_labels,
                 sentiment_labels,
                 topic_labels,
+                loss_weights=self.loss_weights,
+                crisis_class_weights=self.crisis_class_weights,
             )
             out.update(losses)
 
@@ -197,6 +219,9 @@ class QFormerMultiTaskRoberta(nn.Module):
 
     def count_trainable_params(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def set_loss_weights(self, loss_weights: dict[str, float]) -> None:
+        self.loss_weights = dict(loss_weights)
 
 
 class StandardMultiTaskRoberta(nn.Module):
@@ -206,11 +231,19 @@ class StandardMultiTaskRoberta(nn.Module):
         self,
         model_name: str = "roberta-base",
         num_topics: int = len(TOPIC_LABELS),
+        unfreeze_last_n: int = 2,
+        crisis_class_weights: torch.Tensor | None = None,
+        loss_weights: dict[str, float] | None = None,
     ) -> None:
         super().__init__()
         self.encoder = RobertaModel.from_pretrained(model_name)
         hidden_size = self.encoder.config.hidden_size
-        _freeze_encoder(self.encoder)
+        _set_encoder_trainable(self.encoder, unfreeze_last_n=unfreeze_last_n)
+        if crisis_class_weights is not None:
+            self.register_buffer("crisis_class_weights", crisis_class_weights)
+        else:
+            self.crisis_class_weights = None
+        self.loss_weights = dict(loss_weights or LOSS_WEIGHTS)
 
         self.crisis_head = nn.Linear(hidden_size, NUM_CRISIS)
         self.sentiment_head = nn.Linear(hidden_size, 1)
@@ -245,6 +278,8 @@ class StandardMultiTaskRoberta(nn.Module):
                 crisis_labels,
                 sentiment_labels,
                 topic_labels,
+                loss_weights=self.loss_weights,
+                crisis_class_weights=self.crisis_class_weights,
             )
             out.update(losses)
 
@@ -252,3 +287,6 @@ class StandardMultiTaskRoberta(nn.Module):
 
     def count_trainable_params(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def set_loss_weights(self, loss_weights: dict[str, float]) -> None:
+        self.loss_weights = dict(loss_weights)

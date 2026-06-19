@@ -1,4 +1,4 @@
-"""Section 5 baseline — B4 sentiment + B5 BERTopic + TF-IDF crisis LR vs Q-Former."""
+"""Section 5 baseline — B4 sentiment + B5 BERTopic + TF-IDF crisis LR comparison."""
 
 from __future__ import annotations
 
