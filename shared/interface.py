@@ -98,8 +98,8 @@ def run_llm(prompt: str) -> str:
     raise NotImplementedError("A1/A2: wire Ollama client in src/ollama_client.py")
 
 
-def rag_retrieve(query: str, top_k: int = 5) -> list[str]:
-    raise NotImplementedError("A3: wire FAISS retrieval in shared/rag.py")
+def rag_retrieve(query: str, top_k: int = 5) -> tuple[list[str], list[float]]:
+    raise NotImplementedError("A2: wire FAISS retrieval in shared/rag.py")
 
 
 def cot_analyze(posts: list[str]) -> dict[str, Any]:

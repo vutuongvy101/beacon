@@ -6,10 +6,10 @@ from shared.preprocessing import clean_for_llm
 from shared.data_loader import load_all_reddit
 
 INDEX_DIR   = Path("data/faiss_index")
-INDEX_FILE  = INDEX_DIR / "corpus_minilm.index"
+INDEX_FILE  = INDEX_DIR / "corpus.index"
 TEXTS_FILE  = INDEX_DIR / "corpus_texts.json"
 IDS_FILE    = INDEX_DIR / "corpus_ids.json"
-MODEL_NAME  = "all-MiniLM-L6-v2"
+MODEL_NAME  = "multi-qa-MiniLM-L6-cos-v1"
 
 _model  = None   # loaded lazily on first call
 _index  = None
@@ -106,7 +106,7 @@ def _load_or_build(brand: str = "openai") -> None:
         print(f"[RAG] Loaded cached index: {_index.ntotal} posts.")
 
 
-def rag_retrieve(query: str, top_k: int = 5, brand: str = "openai") -> list[str]:
+def rag_retrieve(query: str, top_k: int = 5, brand: str = "openai") -> tuple[list[str], list[float]]:
     """
     Retrieve the top-k most relevant Reddit posts for a query.
     Automatically rebuilds the index if new snapshots are detected.
@@ -119,12 +119,13 @@ def rag_retrieve(query: str, top_k: int = 5, brand: str = "openai") -> list[str]
 
     Returns
     -------
-    list[str] — post texts ordered by relevance, most relevant first
+    tuple[list[str], list[float]] — post texts and their similarity scores, ordered by relevance, most relevant first
     """
     if _index is None:
         _load_or_build(brand)
 
     cleaned = clean_for_llm([query])[0]
     q_vec   = _model.encode([cleaned], normalize_embeddings=True)
-    _, idxs = _index.search(q_vec, top_k)
-    return [_texts[i] for i in idxs[0] if i != -1 and i < len(_texts)]
+    scores, idxs = _index.search(q_vec, top_k)
+    results = [_texts[i] for i in idxs[0] if i != -1 and i < len(_texts)]
+    return results, scores[0]
