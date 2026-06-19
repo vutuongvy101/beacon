@@ -199,14 +199,6 @@ def train_model(
         for key in val_totals:
             history[f"val_{key}" if key != "loss" else "val_loss"].append(val_totals[key] / n_val)
 
-        print(
-            f"Epoch {epoch + 1}: train_loss={history['train_loss'][-1]:.4f} "
-            f"val_loss={history['val_loss'][-1]:.4f} "
-            f"(crisis={history['val_loss_crisis'][-1]:.4f}, "
-            f"sent={history['val_loss_sentiment'][-1]:.4f}, "
-            f"topic={history['val_loss_topic'][-1]:.4f})"
-        )
-
         if auto_loss_weights and epoch == 0 and hasattr(model, "set_loss_weights"):
             losses = {
                 "crisis": history["val_loss_crisis"][-1],
@@ -223,9 +215,8 @@ def train_model(
             model.set_loss_weights(weights)
             print(f"Auto-tuned loss weights after epoch 1 (capped): {weights}")
 
-            # FIX: epoch 0's train_loss/val_loss were combined using the *old*
-            # weights; every later epoch uses the new ones. Recombine epoch 0
-            # under the new weights too, so early stopping compares like with like.
+            # Epoch 0's combined loss used the *old* weights; recompute under the
+            # new weights so early stopping compares like with like.
             history["val_loss"][-1] = (
                 weights["crisis"] * history["val_loss_crisis"][-1]
                 + weights["sentiment"] * history["val_loss_sentiment"][-1]
@@ -236,6 +227,18 @@ def train_model(
                 + weights["sentiment"] * history["train_loss_sentiment"][-1]
                 + weights["topic"] * history["train_loss_topic"][-1]
             )
+            print(
+                "  (recomputed epoch-1 combined loss under new weights: "
+                f"train={history['train_loss'][-1]:.4f}, val={history['val_loss'][-1]:.4f})"
+            )
+
+        print(
+            f"Epoch {epoch + 1}: train_loss={history['train_loss'][-1]:.4f} "
+            f"val_loss={history['val_loss'][-1]:.4f} "
+            f"(crisis={history['val_loss_crisis'][-1]:.4f}, "
+            f"sent={history['val_loss_sentiment'][-1]:.4f}, "
+            f"topic={history['val_loss_topic'][-1]:.4f})"
+        )
 
         current = history["val_loss"][-1]
         if current < best_val - min_delta:
