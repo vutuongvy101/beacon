@@ -247,6 +247,8 @@ def load_model_state_dict(model: torch.nn.Module, state_dict: dict[str, Any]) ->
     """Load weights, ignoring training-only keys such as crisis_class_weights."""
     filtered = {k: v for k, v in state_dict.items() if k not in _TRAINING_ONLY_STATE_KEYS}
     missing, unexpected = model.load_state_dict(filtered, strict=False)
+    missing = [k for k in missing if k not in _TRAINING_ONLY_STATE_KEYS]
+    unexpected = [k for k in unexpected if k not in _TRAINING_ONLY_STATE_KEYS]
     if unexpected:
         raise RuntimeError(f"Unexpected keys when loading checkpoint: {unexpected}")
     if missing:
