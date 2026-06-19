@@ -223,6 +223,20 @@ def train_model(
             model.set_loss_weights(weights)
             print(f"Auto-tuned loss weights after epoch 1 (capped): {weights}")
 
+            # FIX: epoch 0's train_loss/val_loss were combined using the *old*
+            # weights; every later epoch uses the new ones. Recombine epoch 0
+            # under the new weights too, so early stopping compares like with like.
+            history["val_loss"][-1] = (
+                weights["crisis"] * history["val_loss_crisis"][-1]
+                + weights["sentiment"] * history["val_loss_sentiment"][-1]
+                + weights["topic"] * history["val_loss_topic"][-1]
+            )
+            history["train_loss"][-1] = (
+                weights["crisis"] * history["train_loss_crisis"][-1]
+                + weights["sentiment"] * history["train_loss_sentiment"][-1]
+                + weights["topic"] * history["train_loss_topic"][-1]
+            )
+
         current = history["val_loss"][-1]
         if current < best_val - min_delta:
             best_val = current
