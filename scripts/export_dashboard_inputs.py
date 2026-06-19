@@ -23,6 +23,18 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+try:
+    from shared.recommendations import export_recommendations as _export_reco
+    _RECO_AVAILABLE = True
+except ImportError:
+    _RECO_AVAILABLE = False
+
+try:
+    from advanced.layer3_llm.predict import predict as _a1_predict
+    _A1_AVAILABLE = True
+except (ImportError, FileNotFoundError):
+    _A1_AVAILABLE = False
+
 OUTPUT_DIR = ROOT / "data" / "outputs"
 FAISS_DIR = ROOT / "data" / "faiss_index"
 CLEAN_JSONL = ROOT / "data" / "snapshots" / "reddit_openai_clean.jsonl"
@@ -392,6 +404,206 @@ def export_rag_evidence(topics: list[dict], posts: list[dict]) -> list[dict]:
     return out
 
 
+CRISIS_SEVERITY_TO_TIER = {0: "green", 1: "green", 2: "amber", 3: "red"}
+
+SENTIMENT_POS_THRESHOLD = 0.05
+SENTIMENT_NEG_THRESHOLD = -0.05
+
+
+def _a1_predict_batch(texts: list[str]) -> list[dict]:
+    """Run A1's predict() over a list of texts.
+
+    A1 (advanced/layer3_llm/predict.py) currently exposes only a single-text
+    predict(text) -> {"crisis_severity", "sentiment_score", "topic"}.
+    This loops it; for the full 1,211-post corpus this is the dominant cost
+    of the export run. If A1 later exposes a batched predict_batch(texts),
+    swap the loop below for that call.
+    """
+    return [_a1_predict(t) for t in texts]
+
+
+def _assemble_brand_states_from_a1(
+    posts: list[dict],
+    rag_evidence: list[dict],
+) -> list[dict]:
+    """Build one brand-state dict per A1 topic category, using A1's own
+    crisis_severity and sentiment_score classifications rather than the
+    B-series rule-based sentiment/crisis exports.
+
+    A1 topic labels are fixed (see multitask_models.TOPIC_LABELS), so this
+    groups posts by that label directly instead of by a BERTopic cluster id.
+    """
+    texts = [p["clean_text"] or p["raw_text"] for p in posts]
+    preds = _a1_predict_batch(texts)
+    post_map = {p["post_id"]: p for p in posts}
+
+    by_topic: dict[str, list[tuple[dict, dict]]] = defaultdict(list)
+    for post, pred in zip(posts, preds):
+        by_topic[pred["topic"]].append((post, pred))
+
+    evidence_map = {e["topic_id"]: e.get("results", []) for e in rag_evidence}
+    states = []
+
+    for topic_label, items in by_topic.items():
+        scores = [pred["sentiment_score"] for _, pred in items]
+        total = len(scores) or 1
+        pos = sum(1 for s in scores if s > SENTIMENT_POS_THRESHOLD) / total
+        neg = sum(1 for s in scores if s < SENTIMENT_NEG_THRESHOLD) / total
+        neu = 1.0 - pos - neg
+
+        neg_items = sorted(
+            [(p, pr) for p, pr in items if pr["sentiment_score"] < SENTIMENT_NEG_THRESHOLD],
+            key=lambda x: x[0].get("score", 0), reverse=True,
+        )[:3]
+        pos_items = sorted(
+            [(p, pr) for p, pr in items if pr["sentiment_score"] > SENTIMENT_POS_THRESHOLD],
+            key=lambda x: x[0].get("score", 0), reverse=True,
+        )[:2]
+        negative_drivers = [p["title"][:80] for p, _ in neg_items if p.get("title")]
+        positive_drivers = [p["title"][:80] for p, _ in pos_items if p.get("title")]
+
+        max_severity = max((pred["crisis_severity"] for _, pred in items), default=0)
+        crisis_level = CRISIS_SEVERITY_TO_TIER.get(max_severity, "green")
+
+        evidence = [
+            {
+                "post_id": r["post_id"],
+                "excerpt": (r.get("text") or "")[:200],
+                "score":   post_map.get(r["post_id"], {}).get("score", 0),
+            }
+            for r in evidence_map.get(topic_label, [])[:5]
+        ]
+
+        states.append({
+            "scenario_id":      f"topic_{topic_label}",
+            "topic":            topic_label.replace("_", " ").title(),
+            "sentiment":        {"positive": round(pos, 3),
+                                 "neutral":  round(neu, 3),
+                                 "negative": round(neg, 3)},
+            "negative_drivers": negative_drivers,
+            "positive_drivers": positive_drivers,
+            "crisis_level":     crisis_level,
+            "evidence":         evidence,
+        })
+
+    return states
+
+
+def _assemble_brand_states_from_b_series(
+    posts: list[dict],
+    sentiment: list[dict],
+    topics: list[dict],
+    rag_evidence: list[dict],
+) -> list[dict]:
+    """Fallback: build brand states from the B-series rule-based sentiment
+    and crisis exports, used only when A1 is unavailable (no checkpoint
+    trained yet, or advanced.layer3_llm.predict fails to import).
+    """
+    sent_map     = {s["post_id"]: s["label"] for s in sentiment}
+    post_map     = {p["post_id"]: p for p in posts}
+    evidence_map = {e["topic_id"]: e.get("results", []) for e in rag_evidence}
+    states = []
+
+    for topic in topics:
+        tid   = topic["topic_id"]
+        pids  = topic.get("post_ids") or []
+        label = topic.get("label", f"Topic {tid}")
+
+        labels = [sent_map.get(pid) for pid in pids if sent_map.get(pid)]
+        total  = len(labels) or 1
+        pos = labels.count("positive") / total
+        neu = labels.count("neutral")  / total
+        neg = labels.count("negative") / total
+
+        neg_posts = sorted(
+            [post_map[pid] for pid in pids
+             if pid in post_map and sent_map.get(pid) == "negative"],
+            key=lambda p: p.get("score", 0), reverse=True,
+        )[:3]
+        pos_posts = sorted(
+            [post_map[pid] for pid in pids
+             if pid in post_map and sent_map.get(pid) == "positive"],
+            key=lambda p: p.get("score", 0), reverse=True,
+        )[:2]
+        negative_drivers = [p["title"][:80] for p in neg_posts if p.get("title")]
+        positive_drivers = [p["title"][:80] for p in pos_posts if p.get("title")]
+
+        evidence = [
+            {
+                "post_id": r["post_id"],
+                "excerpt": (r.get("text") or "")[:200],
+                "score":   post_map.get(r["post_id"], {}).get("score", 0),
+            }
+            for r in evidence_map.get(tid, [])[:5]
+        ]
+
+        crisis_level = "red" if neg >= 0.4 else "amber" if neg >= 0.28 else "green"
+
+        states.append({
+            "scenario_id":      f"topic_{tid}",
+            "topic":            label,
+            "sentiment":        {"positive": round(pos, 3),
+                                 "neutral":  round(neu, 3),
+                                 "negative": round(neg, 3)},
+            "negative_drivers": negative_drivers,
+            "positive_drivers": positive_drivers,
+            "crisis_level":     crisis_level,
+            "evidence":         evidence,
+        })
+
+    return states
+
+
+def _assemble_brand_states(
+    posts: list[dict],
+    sentiment: list[dict],
+    topics: list[dict],
+    crisis: dict,
+    rag_evidence: list[dict],
+) -> list[dict]:
+    """Build one brand-state dict per topic for the recommendation layer.
+
+    Prefers A1's RoBERTa multitask classifications (crisis_severity,
+    sentiment_score, topic) when the trained checkpoint is available.
+    Falls back to the B-series rule-based sentiment.json / crisis dict
+    and BERTopic/stub topics.json otherwise, so the export script still
+    runs end to end before A1 is trained.
+    """
+    if _A1_AVAILABLE:
+        try:
+            return _assemble_brand_states_from_a1(posts, rag_evidence)
+        except FileNotFoundError as exc:
+            print(f"  Warning: A1 checkpoint not found ({exc}); "
+                  "falling back to B-series sentiment/crisis for brand states.")
+    return _assemble_brand_states_from_b_series(posts, sentiment, topics, rag_evidence)
+
+
+def _export_recommendations_json(
+    posts: list[dict],
+    sentiment: list[dict],
+    topics: list[dict],
+    crisis: dict,
+    rag_evidence: list[dict],
+) -> list[dict]:
+    """Generate brand recommendations per topic and return the dashboard payload.
+
+    Tiered routing (from A4 experiment results):
+      red / amber states  ->  Tree-of-Thought  (higher faithfulness, pairwise preferred)
+      green states        ->  Chain-of-Thought (equivalent quality, 4x cheaper)
+
+    Brand states are sourced from A1's classifier when its checkpoint is
+    available, otherwise from the B-series rule-based exports.
+    Requires Ollama running with qwen2.5:7b pulled for the generation step.
+    Skips gracefully if shared.recommendations is not importable.
+    """
+    if not _RECO_AVAILABLE:
+        print("  Warning: shared.recommendations not importable; "
+              "skipping recommendations.json")
+        return []
+    states = _assemble_brand_states(posts, sentiment, topics, crisis, rag_evidence)
+    return _export_reco(states, method="tiered")
+
+
 def export_faiss(posts: list[dict]) -> None:
     try:
         import faiss
@@ -443,14 +655,23 @@ def main() -> None:
     (OUTPUT_DIR / "sentiment.json").write_text(json.dumps(sentiment, indent=2), encoding="utf-8")
 
     print("Exporting crisis, summaries, qa, rag...")
+    crisis_data = export_crisis(posts, sentiment)
     (OUTPUT_DIR / "crisis.json").write_text(
-        json.dumps(export_crisis(posts, sentiment), indent=2), encoding="utf-8"
+        json.dumps(crisis_data, indent=2), encoding="utf-8"
     )
     (OUTPUT_DIR / "summaries.json").write_text(json.dumps(export_summaries(), indent=2), encoding="utf-8")
     (OUTPUT_DIR / "qa_bank.json").write_text(json.dumps(export_qa_bank(), indent=2), encoding="utf-8")
+    rag = export_rag_evidence(topics, posts)
     (OUTPUT_DIR / "rag_evidence.json").write_text(
-        json.dumps(export_rag_evidence(topics, posts), indent=2), encoding="utf-8"
+        json.dumps(rag, indent=2), encoding="utf-8"
     )
+
+    print("Exporting recommendations.json (A4 ToT / tiered)...")
+    reco = _export_recommendations_json(posts, sentiment, topics, crisis_data, rag)
+    (OUTPUT_DIR / "recommendations.json").write_text(
+        json.dumps(reco, indent=2), encoding="utf-8"
+    )
+    print(f"  {len(reco)} recommendation set(s) written.")
 
     print("Building FAISS index...")
     export_faiss(posts)
