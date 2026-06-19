@@ -23,7 +23,7 @@ DOMAIN_STOPWORDS = {
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 BERTOPIC_NGRAM_RANGE = (1, 2)
-BERTOPIC_MIN_DF = 2
+BERTOPIC_MIN_DF = 1  # c-TF-IDF operates on N_topics pseudo-docs; min_df=2 crashes when few topics found
 BERTOPIC_MAX_DF = 0.90
 DEFAULT_RANDOM_SEED = 42
 
